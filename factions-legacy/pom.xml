@@ -4,20 +4,20 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.massivecraft</groupId>
-        <artifactId>Factions</artifactId>
-        <version>1.6.9.5-4.2.5</version>
+        <groupId>com.realfiction</groupId>
+        <artifactId>RealFactions</artifactId>
+        <version>1.6.9.5-4.2.5-realfactions-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>factions-legacy</artifactId>
     <packaging>jar</packaging>
 
-    <name>SaberFactions Legacy</name>
+    <name>RealFactions Legacy</name>
 
     <dependencies>
         <dependency>
-            <groupId>com.massivecraft</groupId>
+            <groupId>com.realfiction</groupId>
             <artifactId>factions-shared</artifactId>
             <version>${project.version}</version>
         </dependency>

@@ -23,6 +23,8 @@ import com.massivecraft.factions.data.helpers.FactionDataHelper;
 import com.massivecraft.factions.data.listener.FactionDataListener;
 import com.massivecraft.factions.listeners.*;
 import com.massivecraft.factions.missions.MissionHandler;
+import com.massivecraft.factions.scheduler.FactionScheduler;
+import com.massivecraft.factions.scheduler.FactionSchedulers;
 import com.massivecraft.factions.missions.TributeInventoryHandler;
 import com.massivecraft.factions.struct.Relation;
 import com.massivecraft.factions.struct.Role;
@@ -104,6 +106,7 @@ public class FactionsPlugin extends MPlugin {
     private ClipPlaceholderAPIManager clipPlaceholderAPIManager;
     private boolean mvdwPlaceholderAPIManager = false;
     private CompatibilityModule compatibilityModule;
+    private FactionScheduler factionScheduler;
 
     public FactionsPlugin() {
         instance = this;
@@ -129,6 +132,10 @@ public class FactionsPlugin extends MPlugin {
         return compatibilityModule;
     }
 
+    public FactionScheduler getFactionScheduler() {
+        return factionScheduler;
+    }
+
     public boolean usesBrigadierCompletions() {
         return compatibilityModule != null && compatibilityModule.supportsBrigadier();
     }
@@ -140,6 +147,10 @@ public class FactionsPlugin extends MPlugin {
 
     @Override
     public void onEnable() {
+        RealFactionsDataMigrator.migrateIfNeeded(this);
+        this.factionScheduler = FactionSchedulers.create(this);
+        Logger.print("Scheduler mode: " + this.factionScheduler.mode(), Logger.PrefixType.DEFAULT);
+
         if (Bukkit.getPluginManager().getPlugin("Vault") == null) {
             Logger.print("You are missing dependencies!", Logger.PrefixType.FAILED);
             Logger.print("Please verify [Vault] is installed!", Logger.PrefixType.FAILED);
@@ -148,7 +159,7 @@ public class FactionsPlugin extends MPlugin {
             return;
         }
 
-        this.version = Short.parseShort(ReflectionUtils.PackageType.getServerVersion().split("_")[1]);
+        this.version = VersionProtocol.getMajorCompatibilityVersion();
 
         if (!preEnable()) {
             this.loadSuccessful = false;

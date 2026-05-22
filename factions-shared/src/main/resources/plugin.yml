@@ -1,14 +1,15 @@
-name: Factions
-prefix: SaberFactions
+name: RealFactions
+prefix: RealFactions
 version: ${project.version}
-api-version: 1.13
+api-version: '26.1'
 main: com.massivecraft.factions.FactionsPlugin
-authors: [Olof Larsson, Brett Flannigan, drtshock, ProSavage, DroppingAnvil, Driftay, SaberDev, Callum, Atilt]
+authors: [RealFiction, Olof Larsson, Brett Flannigan, drtshock, ProSavage, DroppingAnvil, Driftay, SaberDev, Callum, Atilt]
+provides: [Factions, SaberFactions]
 depend: [Vault]
 softdepend: [Citizens, CoreProtect, PlayerVaults, PlaceholderAPI, MVdWPlaceholderAPI, PermissionsEx, Permissions, Essentials, EssentialsChat, HeroChat, iChat, LocalAreaChat, LWC, nChat, ChatManager, CAPI, AuthMe, Vault, Spout, WorldEdit, WorldGuard, AuthDB, CaptureThePoints, CombatTag, dynmap, WildStacker, Multiverse-Core, MultiWorld, Impact]
 commands:
   factions:
-    description: Reference command for Factions.
+    description: Reference command for RealFactions.
     aliases: [f]
 permissions:
   factions.kit.admin:

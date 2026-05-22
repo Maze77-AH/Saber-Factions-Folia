@@ -30,7 +30,7 @@ public class Logger {
         private final String prefix;
 
         PrefixType(String prefix) {
-            this.prefix = ChatColor.GOLD + "[SaberFactions] " + prefix;
+            this.prefix = ChatColor.GOLD + "[RealFactions] " + prefix;
         }
 
         public String getPrefix() {

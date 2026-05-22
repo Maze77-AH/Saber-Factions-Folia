@@ -4,16 +4,16 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.massivecraft</groupId>
-        <artifactId>Factions</artifactId>
-        <version>1.6.9.5-4.2.5</version>
+        <groupId>com.realfiction</groupId>
+        <artifactId>RealFactions</artifactId>
+        <version>1.6.9.5-4.2.5-realfactions-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>factions-shared</artifactId>
     <packaging>jar</packaging>
 
-    <name>SaberFactions Shared</name>
+    <name>RealFactions Shared</name>
 
     <build>
         <resources>
@@ -26,12 +26,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.10.1</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0-M7</version>
             </plugin>
         </plugins>
     </build>
@@ -39,9 +37,9 @@
     <dependencies>
 
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>${spigot.api.version}</version>
+            <groupId>${modern.api.groupId}</groupId>
+            <artifactId>${modern.api.artifactId}</artifactId>
+            <version>${modern.api.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -318,6 +316,12 @@
             <artifactId>bstats-bukkit</artifactId>
             <version>3.0.1</version>
             <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

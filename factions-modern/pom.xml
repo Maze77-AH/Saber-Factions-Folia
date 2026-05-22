@@ -4,27 +4,27 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.massivecraft</groupId>
-        <artifactId>Factions</artifactId>
-        <version>1.6.9.5-4.2.5</version>
+        <groupId>com.realfiction</groupId>
+        <artifactId>RealFactions</artifactId>
+        <version>1.6.9.5-4.2.5-realfactions-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>factions-modern</artifactId>
     <packaging>jar</packaging>
 
-    <name>SaberFactions Modern</name>
+    <name>RealFactions Modern</name>
 
     <dependencies>
         <dependency>
-            <groupId>com.massivecraft</groupId>
+            <groupId>com.realfiction</groupId>
             <artifactId>factions-shared</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>${spigot.api.version}</version>
+            <groupId>${modern.api.groupId}</groupId>
+            <artifactId>${modern.api.artifactId}</artifactId>
+            <version>${modern.api.version}</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

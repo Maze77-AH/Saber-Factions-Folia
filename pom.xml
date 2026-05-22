@@ -3,12 +3,12 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.massivecraft</groupId>
-    <artifactId>Factions</artifactId>
-    <version>1.6.9.5-4.2.5</version>
+    <groupId>com.realfiction</groupId>
+    <artifactId>RealFactions</artifactId>
+    <version>1.6.9.5-4.2.5-realfactions-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>SaberFactions</name>
+    <name>RealFactions</name>
 
     <modules>
         <module>factions-shared</module>
@@ -19,15 +19,36 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <maven.build.timestamp.format>yyyy-MM-dd--HH-mm</maven.build.timestamp.format>
         <spigot.api.version>1.21.11-R0.1-SNAPSHOT</spigot.api.version>
         <legacy.spigot.api.version>1.8.8-R0.1-SNAPSHOT</legacy.spigot.api.version>
+        <modern.api.groupId>org.spigotmc</modern.api.groupId>
+        <modern.api.artifactId>spigot-api</modern.api.artifactId>
+        <modern.api.version>${spigot.api.version}</modern.api.version>
     </properties>
 
     <build>
         <defaultGoal>clean install deploy</defaultGoal>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.14.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>3.6.2</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
     </build>
 
     <repositories>
@@ -116,4 +137,16 @@
             <url>file://${maven.multiModuleProjectDirectory}/mvn-repo</url>
         </repository>
     </distributionManagement>
+
+    <profiles>
+        <profile>
+            <id>paper26-java25</id>
+            <properties>
+                <maven.compiler.release>25</maven.compiler.release>
+                <modern.api.groupId>io.papermc.paper</modern.api.groupId>
+                <modern.api.artifactId>paper-api</modern.api.artifactId>
+                <modern.api.version>[26.1.2.build,)</modern.api.version>
+            </properties>
+        </profile>
+    </profiles>
 </project>
