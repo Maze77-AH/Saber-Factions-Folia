@@ -219,7 +219,10 @@ public class FactionsPlugin extends MPlugin {
 
             this.factionDataHelper = new FactionDataHelper(this.getDataFolder());
             Bukkit.getPluginManager().registerEvents(new FactionDataListener(this.factionDataHelper), this);
-            Bukkit.getScheduler().runTaskLater(this, () -> {
+            // Route through the scheduler abstraction so this fires on Folia's global region
+            // scheduler instead of Bukkit's main-thread scheduler (which Folia rejects with
+            // UnsupportedOperationException). Behavior on Paper/Purpur is unchanged.
+            getFactionScheduler().runGlobalLater(() -> {
                 for (Faction faction : Factions.getInstance().getAllNormalFactions()) {
                     this.factionDataHelper.getOrLoadFactionData(faction);
                 }
@@ -250,13 +253,13 @@ public class FactionsPlugin extends MPlugin {
             factionsAddonHashMap = new HashMap<>();
             AddonManager.getAddonManagerInstance().loadAddons();
 
-            Bukkit.getScheduler().runTaskLater(this, () -> {
+            getFactionScheduler().runGlobalLater(() -> {
                 //To Add Addon Commands Into "Tab Completion Format"
                 if (!factionsAddonHashMap.isEmpty()) {
                     FCmdRoot.instance.addVariableCommands();
                     FCmdRoot.instance.rebuild();
                 }
-            }, 100);
+            }, 100L);
 
             this.getCommand(refCommand).setExecutor(cmdBase);
             if (!usesBrigadierCompletions()) this.getCommand(refCommand).setTabCompleter(this);
