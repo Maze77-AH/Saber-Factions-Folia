@@ -49,6 +49,11 @@ public final class RealFactionsValidationDiagnostics {
     private final LongAdder economyStrictModeSkips = new LongAdder();
     private final LongAdder economyVaultErrors = new LongAdder();
 
+    private final long sessionStartMs = System.currentTimeMillis();
+    private final AtomicInteger peakPendingModelWrites = new AtomicInteger();
+    private final LongAdder highPendingEvents = new LongAdder();
+    private static final int HIGH_PENDING_THRESHOLD = 5;
+
     public RealFactionsValidationDiagnostics(RealFactionsFlags flags) {
         this.flags = flags;
     }
@@ -62,6 +67,13 @@ public final class RealFactionsValidationDiagnostics {
             return;
         }
         pendingModelWrites.addAndGet(delta);
+        if (delta > 0) {
+            int current = pendingModelWrites.get();
+            updateMaxInt(peakPendingModelWrites, current);
+            if (current >= HIGH_PENDING_THRESHOLD) {
+                highPendingEvents.increment();
+            }
+        }
     }
 
     public void recordWrite(boolean inline, long durationNs) {
@@ -154,7 +166,9 @@ public final class RealFactionsValidationDiagnostics {
     public List<String> formatSummaryLines(RealFactionsEconomyService economy) {
         List<String> lines = new ArrayList<>();
         lines.add("validation-diagnostics: enabled");
-        lines.add("folia: " + flags.isFolia() + ", foliaStrictMode: " + flags.foliaStrictMode());
+        lines.add("session uptime min: " + formatMinutes(System.currentTimeMillis() - sessionStartMs));
+        lines.add("folia: " + flags.isFolia() + ", foliaStrictMode: " + flags.foliaStrictMode()
+                + ", allowDynmapOnFolia: " + flags.allowDynmapOnFolia());
         if (economy != null) {
             lines.add("economy provider: " + economy.providerName()
                     + " (known Folia-safe: " + economy.providerKnownSafe()
@@ -163,6 +177,8 @@ public final class RealFactionsValidationDiagnostics {
 
         lines.add("--- executor ---");
         lines.add("pendingModelWrites (approx queue depth): " + pendingModelWrites.get());
+        lines.add("peak pendingModelWrites: " + peakPendingModelWrites.get()
+                + " (high-water events >= " + HIGH_PENDING_THRESHOLD + ": " + highPendingEvents.sum() + ")");
         lines.add("writes inline/scheduled: " + writesInline.sum() + " / " + writesScheduled.sum());
         lines.add("write latency avg/max ms: "
                 + formatAvgMs(writeDurationTotalNs.sum(), writesInline.sum() + writesScheduled.sum())
@@ -208,6 +224,20 @@ public final class RealFactionsValidationDiagnostics {
                 return;
             }
         } while (!maxHolder.compareAndSet(current, value));
+    }
+
+    private static void updateMaxInt(AtomicInteger maxHolder, int value) {
+        int current;
+        do {
+            current = maxHolder.get();
+            if (value <= current) {
+                return;
+            }
+        } while (!maxHolder.compareAndSet(current, value));
+    }
+
+    private static String formatMinutes(long ms) {
+        return String.format(Locale.ROOT, "%.1f", ms / 60_000.0);
     }
 
     private static String formatAvgMs(long totalNs, long count) {

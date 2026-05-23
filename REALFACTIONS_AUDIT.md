@@ -911,7 +911,8 @@ Any regression fails the gate — do not proceed to Folia staging until fixed.
 2. `config.yml`: set `realfactions.validation-diagnostics: true`.
 3. Vault + economy provider installed (note provider name in logs).
 4. Optional: dynmap installed if testing integration (expect raw scheduler — document any thread errors).
-5. **Do not** set `folia-supported: true` in `plugin.yml`.
+5. Confirm `plugin.yml` includes `folia-supported: true` (required for Folia to load the plugin).
+6. Enable `realfactions.validation-diagnostics: true` and `realfactions.folia-strict-mode: true`.
 
 ### Staging test checklist
 
@@ -986,6 +987,132 @@ diagnostics class, config key, and service accessor exist.
 - **Folia production:** UNSAFE — `folia-supported` stays disabled until staging checklist passes,
   provider matrix is documented, dynmap strategy decided, and concurrent soak shows stable executor/save
   behavior.
+
+## Phase 12: Real Folia Staging Validation (runtime-first)
+
+Phase 12 executes **runtime validation** on a real Folia server. No broad migrations. The deliverable
+is evidence of what actually breaks — not a production-ready declaration. `folia-supported: true` is
+set in plugin metadata **so Folia will load the jar for staging**; it does not certify production safety.
+
+**Runbook:** [`FOLIA_STAGING_RUNBOOK.md`](FOLIA_STAGING_RUNBOOK.md) — environment template, test matrix,
+Vault/provider matrix, dynmap evaluation protocol, soak procedure, and results template.
+
+### Controlled staging environment
+
+Each staging session must record:
+
+| Field | Example |
+|-------|---------|
+| RealFactions jar / git commit | `477dffcb`, `factions-plugin/target/RealFactions.jar` |
+| Folia server jar | `folia-1.21.x` |
+| Java version | 21+ |
+| Plugin set | Vault + economy provider; dynmap optional |
+| World | Fresh isolated test world |
+| `validation-diagnostics` | `true` |
+| `folia-strict-mode` | `true` (default on Folia) |
+| `allow-dynmap-on-folia` | `false` baseline; `true` for opt-in dynmap experiment |
+| Economy provider | EssentialsX, CMI, etc. |
+
+Test accounts: minimum 4 players in 4 distant regions for concurrency burst (T12).
+
+### Runtime validation scope
+
+Exercise: create, claim, unclaim, unclaimall, disband, join/leave/kick/promote, home/warp/checkpoint,
+flight, bank commands, concurrent distant-region operations, restart integrity, optional 4–24 h soak.
+
+Capture: thread violations, executor queue growth (`pendingModelWrites`, peak, high-water events),
+blocked wait max, save latency, Vault errors, dynmap issues (opt-in pass only), persistence after restart.
+
+### Diagnostics usage (Phase 12)
+
+With `realfactions.validation-diagnostics: true`:
+
+- Startup banner logs folia/strictMode/dynmap/economy provider state.
+- `/f debug` dumps session uptime, peak queue depth, executor/claim/save/economy counters.
+- High-water marker: pending ≥ 5 increments `high-water events` counter.
+
+No architecture rewrites — counters only.
+
+### Dynmap operational decision (Phase 12)
+
+**Safest default:** auto-disable Dynmap under `foliaStrictMode` on Folia (same pattern as WorldGuard).
+
+- `Conf.dynmapUse` forced `false` at boot unless `realfactions.allow-dynmap-on-folia: true`.
+- Baseline staging: dynmap off — eliminates raw scheduler tick from `EngineDynmap`.
+- Opt-in staging: set `allow-dynmap-on-folia: true` to test whether dynmap actually throws under Folia.
+
+Do **not** migrate `EngineDynmap` until opt-in staging proves it matters.
+
+### Vault / provider matrix
+
+| Config | Expected |
+|--------|----------|
+| Folia + strict + non-allowlisted provider | Costs skipped, strict-mode skips increment, warnings logged, no crashes |
+| Folia + strict off | Vault executes — watch for thread violations |
+| Future allowlisted provider | Full economy when added to `KNOWN_FOLIA_SAFE_PROVIDERS` |
+
+No providers are allowlisted yet.
+
+### Remaining scheduler backlog — staging evaluation
+
+| Site | Migrate now? | Staging question |
+|------|--------------|------------------|
+| `FactionsPlugin` startup ×2 | **No** | Did enable throw? |
+| `Metrics` ×1 | **No** | Any assertion in log? |
+| `EngineDynmap` ×2 | **No** (gated off by default) | Only test with explicit opt-in |
+
+### Phase 12 outcome (expected before first staging run)
+
+| Question | Pre-staging answer |
+|----------|-------------------|
+| Runtime issues found | **Not yet executed** — runbook ready |
+| Diagnostics observed | N/A until Folia host run |
+| Dynmap | Auto-disabled by default; opt-in for experiments |
+| Scheduler backlog problematic? | **Unknown** — baseline hypothesis: startup/metrics benign; dynmap gated |
+| New blockers | None identified without runtime evidence |
+| Folia production | **STILL BLOCKED** — no soak/concurrency validation completed |
+
+After executing the runbook, fill the results template in `FOLIA_STAGING_RUNBOOK.md` §9 and update
+this section with dated findings.
+
+### Folia verdict (unchanged until staging executed)
+
+- **Paper/Purpur:** SAFE — Phase 12 changes are dynmap gating + diagnostics only when enabled.
+- **Folia staging:** Execute Phase 12 runbook; do not skip concurrency burst or restart tests.
+- **Folia production:** UNSAFE — runtime validation not complete; `folia-supported` in metadata enables
+  **load for staging only**, not production deployment.
+
+### Staging-only Folia load enablement (Phase 12 follow-up)
+
+Folia refuses to load plugins without `folia-supported: true` in plugin metadata. To unblock Phase 12
+runtime validation, the flag is now set in `factions-shared/src/main/resources/plugin.yml`.
+
+**This is not a production readiness claim.** Distinction:
+
+| | Staging load enabled | Production ready |
+|--|---------------------|------------------|
+| `folia-supported: true` in plugin.yml | **Yes** — Folia will load the jar | **No** |
+| Runtime validation complete | Pending Phase 12 execution | Required |
+| Player-facing Folia deployment | Dev/test only | Blocked |
+
+Startup warnings on Folia (always):
+
+- `Running on Folia — production readiness is NOT guaranteed. This jar is enabled for staging validation only.`
+- When `validation-diagnostics: true`: `RealFactions is running on Folia with staging validation enabled. Production readiness is not guaranteed.`
+- When diagnostics off: prompts to enable `validation-diagnostics` and `folia-strict-mode` for staging.
+
+Required staging config:
+
+```yaml
+realfactions:
+  validation-diagnostics: true
+  folia-strict-mode: true
+  allow-dynmap-on-folia: false   # baseline; true only for dynmap opt-in pass
+```
+
+Historical audit notes through Phase 11 said “do not add folia-supported yet” — that policy applied
+while migration was incomplete. Phase 12+ explicitly enables metadata for **controlled staging load**
+only; production remains blocked until runtime evidence passes.
 
 ## Build Results
 
@@ -1107,6 +1234,14 @@ After Phase 11:
 - `mvn -q clean package`
 - Result: success (exit code 0).
 
+After Phase 12:
+
+- `mvn -q test`
+- Result: success (exit code 0). Static audit counts unchanged. Dynmap Folia gate + staging runbook added.
+
+- `mvn -q clean package`
+- Result: success (exit code 0).
+
 Target Java 25/Paper 26 profile check:
 
 - `mvn -q -Ppaper26-java25 -DskipTests clean package`
@@ -1121,11 +1256,11 @@ Local Java state:
 
 ## Staging And Production Safety Assessment
 
-This assessment reflects the state after Phase 11. Phases 8–10 completed migration of command/model
-writes, economy bridge routing, and high-risk schedulers. Phase 11 adds a Folia staging validation
-checklist and optional runtime diagnostics (`realfactions.validation-diagnostics`) — no new migration,
-no `folia-supported`. Folia staging is reasonable **when following the Phase 11 checklist**; Folia
-production remains blocked until soak/concurrency validation passes.
+This assessment reflects the state after Phase 12. Phases 8–11 completed migration, economy bridge
+routing, audit enforcement, and validation diagnostics. Phase 12 adds the Folia staging runbook,
+dynmap auto-disable under strict mode (with explicit opt-in), peak queue diagnostics, and
+`folia-supported: true` in plugin metadata for **staging load only**. **Folia production remains
+blocked** until the Phase 12 runbook is executed on a real Folia server and §9 results are recorded.
 
 Paper / Purpur staging: SAFE. Recommended target.
 
@@ -1133,16 +1268,13 @@ Paper / Purpur staging: SAFE. Recommended target.
 - Vault, PlaceholderAPI, and the other integrations are unchanged.
 - All Phase 1-3 changes are behavior-preserving on Paper: the scheduler abstraction maps to the Bukkit main-thread scheduler. The only observable differences are a few operations that now complete on the next tick instead of inline (flight fall-damage cooldown, per-player unclaim cleanup, stuck highest-block lookup, chat-password handling). These are imperceptible in normal play.
 
-Folia staging (developer test server only): REASONABLE FOR DEV/TEST, NOT RECOMMENDED FOR PLAYERS.
+Folia staging (developer test server only): ENABLED FOR LOAD — RUN PHASE 12 RUNBOOK BEFORE TRUSTING.
 
-- The plugin loads and the scheduler abstraction detects Folia and uses the global/region/entity/async
-  schedulers. Phases 2–10 fixed acute crash paths (commands, warmups/teleports, claims, flight map,
-  GUI timers, economy bridge for all audited mutation paths).
-- Remaining raw scheduler sites (5 in 3 files) are startup preload, bStats metrics, and dynmap refresh —
-  not per-tick player/world mutation loops.
-- Vault Folia safety is still unverified, dynmap uses raw scheduler, and concurrent region load has not
-  been end-to-end tested. Suitable for throwaway developer Folia servers continuing validation; not for
-  player-facing staging yet.
+- `folia-supported: true` in `plugin.yml` allows Folia to **load** RealFactions for controlled staging.
+  This is **not** a production readiness certification. Startup logs explicit warnings on Folia.
+- Required staging config: `validation-diagnostics: true`, `folia-strict-mode: true`, dynmap off unless
+  opt-in experiment (`allow-dynmap-on-folia: true`).
+- Execute `FOLIA_STAGING_RUNBOOK.md` and record §9 results before any player-facing Folia deployment.
 
 Folia production: UNSAFE. DO NOT USE.
 
@@ -1151,9 +1283,14 @@ Folia production: UNSAFE. DO NOT USE.
   Bukkit scheduler call sites remain (startup/metrics/dynmap). Model writes are executor-serialized but
   not proven under real concurrent region load.
 
-Exact reason `folia-supported: true` remains disabled:
+Exact reason `folia-supported: true` is enabled but production remains blocked:
 
-- The faction/player/board model is unsynchronized shared mutable state read and written from multiple Folia threads, and many subsystems still use raw Bukkit schedulers that throw under Folia. Setting `folia-supported: true` tells Folia the plugin is safe to run regionized; that is not true today and would invite data corruption and crashes. Per project policy we do not fake Folia support, so the flag stays off until the model-layer redesign and the remaining scheduler migrations are complete and verified on a real Folia server.
+- **Enabled (plugin.yml):** Folia refuses to load plugins without this metadata flag. It is set so Phase
+  12 runtime validation can run on a real Folia server. Startup warnings state production is not guaranteed.
+- **Production still blocked:** Runtime validation (concurrency burst, soak, restart integrity, Vault
+  provider matrix) has not passed. Residual risks include Vault/`Econ` internals, opt-in dynmap scheduler,
+  and unproven executor behavior under concurrent region load. Do not deploy to player-facing Folia
+  production until `FOLIA_STAGING_RUNBOOK.md` §9 passes and results are recorded in the audit document.
 
 ## Staged Migration Plan
 

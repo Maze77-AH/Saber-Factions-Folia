@@ -13,6 +13,8 @@ import org.bukkit.configuration.file.FileConfiguration;
  *       when running Folia).</li>
  *   <li>{@code validationDiagnostics} - collect lightweight runtime counters for Folia staging
  *       validation (defaults off; enable only on test servers).</li>
+ *   <li>{@code allowDynmapOnFolia} - opt in to Dynmap integration on Folia when {@code foliaStrictMode}
+ *       would otherwise disable it (defaults off).</li>
  * </ul>
  *
  * <p>The defaults intentionally keep Paper/Purpur behaviour unchanged while making Folia fail
@@ -25,20 +27,23 @@ public final class RealFactionsFlags {
     private final boolean legacyCompatibilityMode;
     private final boolean foliaStrictMode;
     private final boolean validationDiagnostics;
+    private final boolean allowDynmapOnFolia;
 
     private RealFactionsFlags(boolean folia, boolean legacyCompatibilityMode, boolean foliaStrictMode,
-                                boolean validationDiagnostics) {
+                                boolean validationDiagnostics, boolean allowDynmapOnFolia) {
         this.folia = folia;
         this.legacyCompatibilityMode = legacyCompatibilityMode;
         this.foliaStrictMode = foliaStrictMode;
         this.validationDiagnostics = validationDiagnostics;
+        this.allowDynmapOnFolia = allowDynmapOnFolia;
     }
 
     public static RealFactionsFlags from(FileConfiguration config, boolean folia) {
         boolean legacy = config.getBoolean("realfactions.legacy-compatibility-mode", !folia);
         boolean strict = config.getBoolean("realfactions.folia-strict-mode", folia);
         boolean diagnostics = config.getBoolean("realfactions.validation-diagnostics", false);
-        return new RealFactionsFlags(folia, legacy, strict, diagnostics);
+        boolean allowDynmap = config.getBoolean("realfactions.allow-dynmap-on-folia", false);
+        return new RealFactionsFlags(folia, legacy, strict, diagnostics, allowDynmap);
     }
 
     public boolean isFolia() {
@@ -66,5 +71,12 @@ public final class RealFactionsFlags {
      */
     public boolean validationDiagnostics() {
         return validationDiagnostics;
+    }
+
+    /**
+     * @return true when Dynmap integration may run on Folia despite {@code foliaStrictMode}.
+     */
+    public boolean allowDynmapOnFolia() {
+        return allowDynmapOnFolia;
     }
 }

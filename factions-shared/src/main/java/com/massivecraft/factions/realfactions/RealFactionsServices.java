@@ -96,6 +96,13 @@ public final class RealFactionsServices {
             Conf.worldGuardChecking = false;
             Logger.print("[RealFactions] foliaStrictMode: disabled WorldGuard claim checking (not Folia-safe).", Logger.PrefixType.WARNING);
         }
+        // Dynmap refresh uses raw Bukkit scheduler and traverses faction state offsite a global tick.
+        if (Conf.dynmapUse && flags.isFolia() && !flags.allowDynmapOnFolia()) {
+            Conf.dynmapUse = false;
+            Logger.print("[RealFactions] foliaStrictMode: disabled Dynmap integration (raw scheduler; "
+                    + "set realfactions.allow-dynmap-on-folia: true to opt in for staging experiments).",
+                    Logger.PrefixType.WARNING);
+        }
     }
 
     /**
@@ -105,9 +112,29 @@ public final class RealFactionsServices {
         // Refresh the chat display cache on the model thread (every 2s) so AsyncPlayerChatEvent
         // can read immutable snapshots instead of traversing the live model off-thread.
         scheduler.runGlobalTimer(() -> executor.runMarked(chatCache::refreshOnline), 40L, 40L);
+        if (flags.isFolia()) {
+            Logger.print("[RealFactions] Running on Folia — production readiness is NOT guaranteed. "
+                    + "This jar is enabled for staging validation only.", Logger.PrefixType.WARNING);
+            if (flags.validationDiagnostics()) {
+                Logger.print("[RealFactions] RealFactions is running on Folia with staging validation "
+                        + "enabled. Production readiness is not guaranteed.", Logger.PrefixType.WARNING);
+            } else {
+                Logger.print("[RealFactions] For staging runs, set realfactions.validation-diagnostics: "
+                        + "true and realfactions.folia-strict-mode: true in config.yml.", Logger.PrefixType.WARNING);
+            }
+        }
         if (flags.validationDiagnostics()) {
             Logger.print("[RealFactions] validation-diagnostics enabled — use /f debug for runtime counters.",
                     Logger.PrefixType.DEFAULT);
+            logStagingEnvironmentBanner();
         }
+    }
+
+    private void logStagingEnvironmentBanner() {
+        Logger.print("[RealFactions] Folia staging session — folia=" + flags.isFolia()
+                + " strictMode=" + flags.foliaStrictMode()
+                + " dynmapOptIn=" + flags.allowDynmapOnFolia()
+                + " dynmapUse=" + Conf.dynmapUse
+                + " economyProvider=" + economy.providerName(), Logger.PrefixType.DEFAULT);
     }
 }

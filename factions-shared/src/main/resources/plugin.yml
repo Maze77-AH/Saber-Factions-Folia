@@ -2,6 +2,7 @@ name: RealFactions
 prefix: RealFactions
 version: ${project.version}
 api-version: '26.1'
+folia-supported: true
 main: com.massivecraft.factions.FactionsPlugin
 authors: [RealFiction, Olof Larsson, Brett Flannigan, drtshock, ProSavage, DroppingAnvil, Driftay, SaberDev, Callum, Atilt]
 provides: [Factions, SaberFactions]

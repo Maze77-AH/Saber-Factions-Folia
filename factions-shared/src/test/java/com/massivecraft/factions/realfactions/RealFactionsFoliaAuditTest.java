@@ -423,5 +423,21 @@ class RealFactionsFoliaAuditTest {
         String services = read(root.resolve("com/massivecraft/factions/realfactions/RealFactionsServices.java"));
         assertTrue(services.contains("diagnostics()"),
                 "RealFactionsServices must expose validation diagnostics.");
+        assertTrue(flags.contains("allow-dynmap-on-folia"),
+                "RealFactionsFlags must expose realfactions.allow-dynmap-on-folia for Folia dynmap opt-in.");
+        assertTrue(services.contains("disabled Dynmap integration"),
+                "RealFactionsServices must gate Dynmap under foliaStrictMode unless explicitly opted in.");
+    }
+
+    @Test
+    void pluginMetadataAllowsFoliaStagingLoad() {
+        Path pluginYml = Paths.get("factions-shared/src/main/resources/plugin.yml");
+        if (!Files.exists(pluginYml)) {
+            pluginYml = Paths.get("src/main/resources/plugin.yml");
+        }
+        assertTrue(Files.exists(pluginYml), "plugin.yml must exist for Folia staging load metadata check.");
+        String content = read(pluginYml);
+        assertTrue(content.contains("folia-supported: true"),
+                "plugin.yml must declare folia-supported: true so Folia can load the plugin for staging validation.");
     }
 }
