@@ -1,6 +1,7 @@
 package com.massivecraft.factions.cmd.econ;
 
 import com.massivecraft.factions.Conf;
+import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.cmd.Aliases;
 import com.massivecraft.factions.cmd.CommandContext;
 import com.massivecraft.factions.cmd.CommandRequirements;
@@ -45,7 +46,8 @@ public class CmdMoneyTransferPf extends FCommand {
             return;
         }
 
-        boolean success = Econ.transferMoney(context.fPlayer, from, to, amount);
+        boolean success = FactionsPlugin.getInstance().getRealFactionsServices().economy()
+                .transferMoney(context.fPlayer, from, to, amount);
 
         if (success && Conf.logMoneyTransactions) {
             Logger.printArgs(TL.COMMAND_MONEYTRANSFERPF_TRANSFER.toString(), Logger.PrefixType.WARNING, context.fPlayer.getName(), Econ.moneyString(amount), from.describeTo(null), to.describeTo(null));

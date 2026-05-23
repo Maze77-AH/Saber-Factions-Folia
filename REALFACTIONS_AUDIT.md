@@ -710,6 +710,73 @@ command model-write blockers and established the economy bridge for faction crea
 Vault usage still flows through legacy `Econ`, ~24 raw scheduler sites remain, and the model is not
 yet provably single-writer end to end for economy-interleaved paths. Paper/Purpur staging remains safe.
 
+## Phase 9: Economy Containment and High-Risk Scheduler Reduction
+
+Phase 9 extends the economy bridge to common command/GUI/model paths and migrates high-risk raw
+scheduler sites. `folia-supported` remains disabled.
+
+### Legacy Econ/Vault containment
+
+Extended `RealFactionsEconomyService` with `hasAtLeast`, `modifyMoney`, `transferMoney`,
+`payCommandCost`, and `canAffordCommandCost` — all serialized on the model/global thread and gated
+under `foliaStrictMode`.
+
+Routed through the bridge in Phase 9:
+
+- `CommandContext.payForCommand` / `canAffordCommand` (all command costs site-wide)
+- Bank commands: deposit, withdraw, and all three transfer variants
+- `/f unclaimall` refund, `/f unclaimfill` refund batch
+- GUI: mission cancel cost, faction warp cost, upgrade purchase cost
+- Model: `MemoryFPlayer.leave()` cost/transfer, `attemptClaim()` cost/reward, single-chunk unclaim refund
+
+Still on legacy direct `Econ.*` (audited, not migrated):
+
+- `MemoryFaction` disband bank payout (`transferMoney` interleaved with model teardown)
+- `Econ.java` internals (`Bukkit.getOfflinePlayer(String)` for name-based accounts)
+- Read-only display paths (tags, placeholders, `/f top`, help text)
+
+Under Folia strict mode, routed paths treat economy as disabled (costs skipped or bank transfers
+return false); legacy paths remain unsafe until migrated.
+
+### Raw scheduler sites migrated (high-risk)
+
+- `MissionGUI` — GUI close check and refresh timer to player entity scheduler
+- `CheckTask` — faction check map writes to model executor (was raw `runTask`)
+- `UpgradesListener` — spawner delay mutation to region scheduler at spawner location
+- `AutoRespawn` / `GlobalGamemode` — delayed player effects to entity scheduler
+- `MemoryFPlayer.updatePower` — off-thread regen to global scheduler
+- `FactionsPlugin.startAutoLeaveTask` — auto-leave timer to `runGlobalTimer` with handle-based cancel
+
+Intentionally deferred (low per-call risk or startup/file/metrics):
+
+- `FactionsPlugin` startup `runTaskLater` (faction-data preload, addon registry)
+- `Metrics`, `TimerManager`, `AsyncPlayerMap`, `EngineDynmap`, `FLogManager`, `JSONFPlayers`, commented
+  startup paths in `StartupParameter`
+
+### Audit test extended
+
+`RealFactionsFoliaAuditTest` now also:
+
+- Reports legacy `Econ.modifyMoney`/`transferMoney`/etc. call sites outside the bridge (informational backlog)
+- Protects Phase 9 economy-routed files from regression
+- Protects Phase 9 scheduler-migrated files from regression
+
+Current audit-scanner counts after Phase 9:
+
+- Direct `Board.getInstance()` write call sites outside the model/service: **0**.
+- Direct `Factions.createFaction()` call sites outside the creation service: **0**.
+- Unmigrated command model mutations: **0**.
+- Raw Bukkit scheduler usages outside the scheduler abstraction: **12** across **8** files (down from 24).
+- Legacy Econ mutation call sites outside the bridge: **2** in **1** file (`MemoryFaction` disband payout).
+- Listener/task model-mutation backlog: **0**.
+
+### Folia verdict (unchanged)
+
+Folia production remains **UNSAFE** and `folia-supported` stays disabled. Phase 9 routed the
+highest-traffic economy command paths through the bridge and halved the raw scheduler backlog, but
+disband bank payout, name-based `getOfflinePlayer(String)` in `Econ`, and 12 startup/integration
+scheduler sites remain. Paper/Purpur staging remains safe.
+
 ## Build Results
 
 Baseline before edits:
@@ -801,6 +868,16 @@ After Phase 8:
 - `mvn -q clean package`
 - Result: success (exit code 0).
 
+After Phase 9:
+
+- `mvn -q test`
+- Result: success (exit code 0). 10 tests pass, including `RealFactionsFoliaAuditTest` (7 tests). The
+  scanner reports 12 raw Bukkit scheduler usages across 8 files, 0 unmigrated command classes, 2 legacy
+  Econ mutation sites in `MemoryFaction`, and 0 listener mutation backlog.
+
+- `mvn -q clean package`
+- Result: success (exit code 0).
+
 Target Java 25/Paper 26 profile check:
 
 - `mvn -q -Ppaper26-java25 -DskipTests clean package`
@@ -815,16 +892,12 @@ Local Java state:
 
 ## Staging And Production Safety Assessment
 
-This assessment reflects the state after Phase 8. Phases 4-7 built the Folia-first core and migrated
-all board writes plus the common, membership, role, invite, and permission commands and the
-highest-risk listeners. Phase 7 migrated the remaining safe command writers and the highest-risk raw
-scheduler sites. Phase 8 migrated `/f create` and `/f createadmin` through `FactionCreationService`,
-implemented the foundational `RealFactionsEconomyService` bridge, and brought unmigrated command
-model writes to zero. After Phase 8 the scanner reports 0 direct board writes in commands, 0 direct
-`createFaction()` calls outside the service, 0 unmigrated command classes, 24 raw scheduler sites,
-and 0 listener mutation backlog. But the bulk of Vault usage still flows through legacy `Econ`, ~24
-raw scheduler sites remain, and economy-interleaved model paths are not yet end-to-end single-writer,
-so Folia production stays unsafe and `folia-supported` stays off.
+This assessment reflects the state after Phase 9. Phase 8 completed faction creation and the economy
+bridge foundation. Phase 9 routed command costs, bank commands, claim/leave/unclaim economy paths, and
+key GUI costs through `RealFactionsEconomyService`, and migrated high-risk GUI/player/region scheduler
+sites (raw scheduler count 24 → 12). After Phase 9: 0 command model-write backlog, 12 raw scheduler
+sites (mostly startup/metrics/dynmap), 2 legacy Econ mutations in disband payout only. Folia production
+stays unsafe; `folia-supported` stays off.
 
 Paper / Purpur staging: SAFE. Recommended target.
 

@@ -3,6 +3,7 @@ package com.massivecraft.factions.zcore.frame.fwarps;
 import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.*;
 import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.realfactions.RealFactionsEconomyService;
 import com.massivecraft.factions.util.*;
 import com.massivecraft.factions.util.serializable.InventoryItem;
 import com.massivecraft.factions.zcore.util.TL;
@@ -64,13 +65,13 @@ public class FactionWarpsFrame extends SaberGUI {
             return true;
         double cost = FactionsPlugin.getInstance().getConfig().getDouble("warp-cost.warp", 5);
 
-        if (!Econ.shouldBeUsed() || cost == 0.0 || player.isAdminBypassing()) return true;
+        RealFactionsEconomyService economy = FactionsPlugin.getInstance().getRealFactionsServices().economy();
+        if (!economy.isEconomyEnabled() || cost == 0.0 || player.isAdminBypassing()) return true;
 
         if (Conf.bankEnabled && Conf.bankFactionPaysCosts && player.hasFaction()) {
             return Econ.withdrawFactionBalance(player.getFaction(), cost);
-        } else {
-            return Econ.modifyMoney(player, -cost, TL.COMMAND_FWARP_TOWARP.toString(), TL.COMMAND_FWARP_FORWARPING.toString());
         }
+        return economy.modifyMoney(player, -cost, TL.COMMAND_FWARP_TOWARP.toString(), TL.COMMAND_FWARP_FORWARPING.toString());
     }
 
     @Override

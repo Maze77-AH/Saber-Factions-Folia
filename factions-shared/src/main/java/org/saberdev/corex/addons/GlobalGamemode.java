@@ -1,7 +1,6 @@
 package org.saberdev.corex.addons;
 
 import com.massivecraft.factions.FactionsPlugin;
-import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,11 +21,9 @@ public class GlobalGamemode implements Listener {
             final GameMode gm = e.getPlayer().getGameMode();
             final Player p = e.getPlayer();
             if (gm == GameMode.CREATIVE) {
-                Bukkit.getScheduler().runTaskLater(FactionsPlugin.getInstance(), () -> {
-                    if (p.isOnline()) {
-                        if (p.getGameMode() != gm) {
-                            p.setGameMode(gm);
-                        }
+                FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(p, () -> {
+                    if (p.isOnline() && p.getGameMode() != gm) {
+                        p.setGameMode(gm);
                     }
                 }, 2L);
             }

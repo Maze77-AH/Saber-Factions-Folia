@@ -61,7 +61,8 @@ public class CmdMoneyWithdraw extends FCommand {
                 return;
             }
         }
-        boolean success = Econ.transferMoney(context.fPlayer, faction, context.fPlayer, amount);
+        boolean success = FactionsPlugin.getInstance().getRealFactionsServices().economy()
+                .transferMoney(context.fPlayer, faction, context.fPlayer, amount);
 
         if (success && Conf.logMoneyTransactions) {
             Logger.printArgs(TL.COMMAND_MONEYWITHDRAW_WITHDRAW.toString(), Logger.PrefixType.WARNING, context.fPlayer.getName(), Econ.moneyString(amount), faction.describeTo(null));

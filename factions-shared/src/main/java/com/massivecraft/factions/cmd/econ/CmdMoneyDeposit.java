@@ -52,7 +52,8 @@ public class CmdMoneyDeposit extends FCommand {
             return;
         }
 
-        boolean success = Econ.transferMoney(context.fPlayer, context.fPlayer, econFac, amount);
+        boolean success = FactionsPlugin.getInstance().getRealFactionsServices().economy()
+                .transferMoney(context.fPlayer, context.fPlayer, econFac, amount);
 
         if (success && Conf.logMoneyTransactions) {
             Logger.printArgs(TL.COMMAND_MONEYDEPOSIT_DEPOSITED.toString(), Logger.PrefixType.DEFAULT, context.fPlayer.getName(), Econ.moneyString(amount), econFac.describeTo(null));

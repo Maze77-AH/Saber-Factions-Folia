@@ -3,6 +3,7 @@ package com.massivecraft.factions.realfactions;
 import com.massivecraft.factions.Conf;
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.Faction;
+import com.massivecraft.factions.iface.EconomyParticipator;
 import com.massivecraft.factions.integration.Econ;
 import com.massivecraft.factions.util.Logger;
 
@@ -14,22 +15,18 @@ import java.util.function.Supplier;
  *
  * <p>Vault economy providers (EssentialsX, CMI, etc.) are written for a single main thread and are
  * generally not Folia-aware. RealFactions must therefore not call Vault from arbitrary region
- * threads. This service is the controlled entry point for the new code paths:
+ * threads. This service is the controlled entry point for economy operations:
  *
  * <ul>
  *   <li>It detects the Vault provider and reports whether it is on the known-Folia-safe allowlist.</li>
- *   <li>It serializes economy work onto the designated economy thread - the model/global thread via
- *       {@link FactionOperationExecutor} - so Vault is never touched from a region thread.</li>
+ *   <li>It serializes Vault work onto the model/global thread via {@link FactionOperationExecutor}.</li>
  *   <li>Under {@code foliaStrictMode}, when the provider is not known Folia-safe, it disables economy
  *       so costs/refunds are skipped instead of issuing unsafe cross-thread Vault calls.</li>
  * </ul>
  *
- * <p>This is the foundational bridge: it gates and routes the NEW economy paths (faction creation).
- * The legacy {@code Econ.*} call sites in other commands (cost/refund via {@code payForCommand}) are
- * not yet routed through it; that broader migration is tracked in the audit document.
- *
  * <p><b>Vault is not assumed Folia-safe.</b> Treat every provider as single-thread-only unless it is
- * explicitly allowlisted in {@link #KNOWN_FOLIA_SAFE_PROVIDERS}.
+ * explicitly allowlisted in {@link #KNOWN_FOLIA_SAFE_PROVIDERS}. Legacy call sites not yet routed
+ * through this service remain a Folia risk and are tracked in the audit document.
  */
 public final class RealFactionsEconomyService {
 
@@ -127,13 +124,61 @@ public final class RealFactionsEconomyService {
         return executor.runWriteForResult(vaultWork);
     }
 
+    public boolean hasAtLeast(EconomyParticipator ep, double delta, String toDoThis) {
+        if (!applyCommandEconomyCosts()) {
+            return true;
+        }
+        return runEconomy(() -> Econ.hasAtLeast(ep, delta, toDoThis), true);
+    }
+
+    public boolean modifyMoney(EconomyParticipator ep, double delta, String toDoThis, String forDoingThis) {
+        if (!applyCommandEconomyCosts()) {
+            return true;
+        }
+        return runEconomy(() -> Econ.modifyMoney(ep, delta, toDoThis, forDoingThis), true);
+    }
+
+    public boolean transferMoney(FPlayer invoker, EconomyParticipator from, EconomyParticipator to, double amount) {
+        return transferMoney(invoker, from, to, amount, true);
+    }
+
+    public boolean transferMoney(FPlayer invoker, EconomyParticipator from, EconomyParticipator to, double amount,
+                                 boolean notify) {
+        if (!isEconomyEnabled()) {
+            return false;
+        }
+        return runEconomy(() -> Econ.transferMoney(invoker, from, to, amount, notify), false);
+    }
+
+    public boolean payCommandCost(FPlayer player, Faction faction, double cost, String toDoThis, String forDoingThis) {
+        if (player == null || cost == 0.0 || player.isAdminBypassing()) {
+            return true;
+        }
+        if (!applyCommandEconomyCosts()) {
+            return true;
+        }
+        if (Conf.bankEnabled && Conf.bankFactionPaysCosts && player.hasFaction()) {
+            return modifyMoney(faction, -cost, toDoThis, forDoingThis);
+        }
+        return modifyMoney(player, -cost, toDoThis, forDoingThis);
+    }
+
+    public boolean canAffordCommandCost(FPlayer player, Faction faction, double cost, String toDoThis) {
+        if (player == null || cost == 0.0 || player.isAdminBypassing()) {
+            return true;
+        }
+        if (!applyCommandEconomyCosts()) {
+            return true;
+        }
+        if (Conf.bankEnabled && Conf.bankFactionPaysCosts && player.hasFaction()) {
+            return hasAtLeast(faction, cost, toDoThis);
+        }
+        return hasAtLeast(player, cost, toDoThis);
+    }
+
     /**
      * Set a newly created faction's starting balance. Intended to be called on the model thread
-     * (for example from inside a {@link FactionCreationService} transaction). Matches legacy
-     * {@code /f create} behaviour: only runs when {@code Conf.econEnabled} is true. When Folia
-     * strict mode has disabled economy, the balance step is skipped and treated as success.
-     *
-     * @return false only when a Vault balance setup was attempted and failed
+     * (for example from inside a {@link FactionCreationService} transaction).
      */
     public boolean initStartingBalance(Faction faction) {
         if (!Conf.econEnabled) {

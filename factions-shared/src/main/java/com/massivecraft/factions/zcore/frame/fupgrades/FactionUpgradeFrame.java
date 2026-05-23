@@ -84,7 +84,8 @@ public class FactionUpgradeFrame extends SaberGUI {
 
         EconomyParticipator economyParticipator = Conf.bankEnabled && upgradeConf.getBoolean("fupgrades.factionPaysForUpgradeCost", false) ? faction : fme;
 
-        if (Econ.modifyMoney(economyParticipator, -cost, TextUtil.parse(TL.UPGRADE_TOUPGRADE.toString(), upgradeId), TextUtil.parse(TL.UPGRADE_FORUPGRADE.toString(), upgradeId))) {
+        if (FactionsPlugin.getInstance().getRealFactionsServices().economy()
+                .modifyMoney(economyParticipator, -cost, TextUtil.parse(TL.UPGRADE_TOUPGRADE.toString(), upgradeId), TextUtil.parse(TL.UPGRADE_FORUPGRADE.toString(), upgradeId))) {
             handleTransaction(fme, upgradeId);
             faction.setUpgrade(upgradeId, currentFactionLevel + 1);
             redraw();

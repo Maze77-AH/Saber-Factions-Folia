@@ -107,7 +107,14 @@ class RealFactionsFoliaAuditTest {
         List<String> mustBeClean = List.of(
                 "com/massivecraft/factions/util/spiral/SpiralTask.java",
                 "com/massivecraft/factions/cmd/claim/CmdClaim.java",
-                "com/massivecraft/factions/cmd/claim/CmdUnclaim.java"
+                "com/massivecraft/factions/cmd/claim/CmdUnclaim.java",
+                // Phase 9
+                "com/massivecraft/factions/missions/MissionGUI.java",
+                "com/massivecraft/factions/cmd/check/CheckTask.java",
+                "com/massivecraft/factions/zcore/frame/fupgrades/UpgradesListener.java",
+                "com/massivecraft/factions/zcore/persist/MemoryFPlayer.java",
+                "org/saberdev/corex/addons/AutoRespawn.java",
+                "org/saberdev/corex/addons/GlobalGamemode.java"
         );
         for (String clean : mustBeClean) {
             assertTrue(!offenders.containsKey(clean),
@@ -320,5 +327,70 @@ class RealFactionsFoliaAuditTest {
             assertTrue(content.contains("factionCreation()"),
                     cmd + " must call FactionCreationService instead of Factions.getInstance().createFaction().");
         }
+    }
+
+    /** Direct Vault/economy mutations outside the bridge and known-safe read-only paths. */
+    private static final Pattern DIRECT_ECON_MUTATION = Pattern.compile(
+            "Econ\\.(modifyMoney|transferMoney|setBalance|modifyBalance|withdraw|deposit)\\(");
+
+    @Test
+    void reportLegacyEconUsageAndProtectEconomyBridgeRouting() {
+        Path root = sourceRoot();
+        Set<String> allowlisted = Set.of(
+                "com/massivecraft/factions/integration/Econ.java",
+                "com/massivecraft/factions/realfactions/RealFactionsEconomyService.java",
+                "com/massivecraft/factions/realfactions/FactionCreationService.java",
+                // read-only / display / admin in-memory faction balance helpers
+                "com/massivecraft/factions/tag/FactionTag.java",
+                "com/massivecraft/factions/tag/PlayerTag.java",
+                "com/massivecraft/factions/util/ClipPlaceholderAPIManager.java",
+                "com/massivecraft/factions/zcore/util/TagReplacer.java",
+                "com/massivecraft/factions/cmd/CmdHelp.java",
+                "com/massivecraft/factions/cmd/CmdTop.java",
+                "com/massivecraft/factions/zcore/MCommand.java",
+                "com/massivecraft/factions/cmd/FCommand.java"
+        );
+
+        Map<String, Integer> backlog = new LinkedHashMap<>();
+        int total = 0;
+        for (Path file : javaFiles(root)) {
+            String rel = root.relativize(file).toString().replace('\\', '/');
+            if (allowlisted.contains(rel)) {
+                continue;
+            }
+            int n = countMatches(DIRECT_ECON_MUTATION, read(file));
+            if (n > 0) {
+                backlog.put(rel, n);
+                total += n;
+            }
+        }
+
+        System.out.println("[RealFactions Folia audit] legacy Econ mutation call sites outside the bridge: "
+                + total + " across " + backlog.size() + " files (economy migration backlog)");
+        backlog.forEach((f, n) -> System.out.println("    " + n + "  " + f));
+
+        List<String> economyRouted = List.of(
+                "com/massivecraft/factions/cmd/CommandContext.java",
+                "com/massivecraft/factions/cmd/econ/CmdMoneyDeposit.java",
+                "com/massivecraft/factions/cmd/econ/CmdMoneyWithdraw.java",
+                "com/massivecraft/factions/cmd/econ/CmdMoneyTransferPf.java",
+                "com/massivecraft/factions/cmd/econ/CmdMoneyTransferFp.java",
+                "com/massivecraft/factions/cmd/econ/CmdMoneyTransferFf.java",
+                "com/massivecraft/factions/cmd/claim/CmdUnclaimall.java",
+                "com/massivecraft/factions/cmd/claim/CmdUnclaimfill.java",
+                "com/massivecraft/factions/missions/MissionGUI.java",
+                "com/massivecraft/factions/zcore/frame/fwarps/FactionWarpsFrame.java",
+                "com/massivecraft/factions/zcore/frame/fupgrades/FactionUpgradeFrame.java"
+        );
+        for (String routed : economyRouted) {
+            String content = read(root.resolve(routed));
+            assertTrue(content.contains("getRealFactionsServices().economy()"),
+                    routed + " must route economy mutations through RealFactionsEconomyService.");
+        }
+
+        // MemoryFPlayer claim/leave costs must use the bridge for Vault-touching paths.
+        String memoryFPlayer = read(root.resolve("com/massivecraft/factions/zcore/persist/MemoryFPlayer.java"));
+        assertTrue(memoryFPlayer.contains("getRealFactionsServices().economy()"),
+                "MemoryFPlayer claim/leave economy paths must use RealFactionsEconomyService.");
     }
 }

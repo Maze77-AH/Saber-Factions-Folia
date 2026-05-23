@@ -43,6 +43,7 @@ import com.massivecraft.factions.zcore.frame.fupgrades.UpgradesListener;
 import com.massivecraft.factions.zcore.util.ShutdownParameter;
 import com.massivecraft.factions.zcore.util.StartupParameter;
 import com.massivecraft.factions.zcore.util.TextUtil;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.permission.Permission;
 import org.bukkit.Bukkit;
@@ -103,7 +104,7 @@ public class FactionsPlugin extends MPlugin {
     public TimerManager timerManager;
     private FactionsPlayerListener factionsPlayerListener;
     private boolean locked = false;
-    private Integer AutoLeaveTask = null;
+    private ScheduledTaskHandle autoLeaveTaskHandle = null;
     private ClipPlaceholderAPIManager clipPlaceholderAPIManager;
     private boolean mvdwPlaceholderAPIManager = false;
     private CompatibilityModule compatibilityModule;
@@ -323,9 +324,9 @@ public class FactionsPlugin extends MPlugin {
 
         ShutdownParameter.initShutdown(this);
 
-        if (this.AutoLeaveTask != null) {
-            getServer().getScheduler().cancelTask(this.AutoLeaveTask);
-            this.AutoLeaveTask = null;
+        if (this.autoLeaveTaskHandle != null) {
+            this.autoLeaveTaskHandle.cancel();
+            this.autoLeaveTaskHandle = null;
         }
         if (TextUtil.AUDIENCES != null) {
             TextUtil.AUDIENCES.close();
@@ -340,15 +341,15 @@ public class FactionsPlugin extends MPlugin {
     }
 
     public void startAutoLeaveTask(boolean restartIfRunning) {
-        if (AutoLeaveTask != null) {
+        if (autoLeaveTaskHandle != null) {
             if (!restartIfRunning) return;
-            this.getServer().getScheduler().cancelTask(AutoLeaveTask);
+            autoLeaveTaskHandle.cancel();
         }
 
         if (Conf.useAutoLeaveAndDisbandSystem) {
             if (Conf.autoLeaveRoutineRunsEveryXMinutes > 0.0) {
                 long ticks = (long) (20 * 60 * Conf.autoLeaveRoutineRunsEveryXMinutes);
-                AutoLeaveTask = getServer().getScheduler().scheduleSyncRepeatingTask(this, new AutoLeaveTask(), ticks, ticks);
+                autoLeaveTaskHandle = getFactionScheduler().runGlobalTimer(new AutoLeaveTask(), ticks, ticks);
             }
         }
     }

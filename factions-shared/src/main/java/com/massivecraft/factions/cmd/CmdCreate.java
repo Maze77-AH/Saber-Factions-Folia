@@ -6,7 +6,6 @@ import com.massivecraft.factions.event.FPlayerJoinEvent;
 import com.massivecraft.factions.event.FactionCreateEvent;
 import com.massivecraft.factions.Factions;
 import com.massivecraft.factions.realfactions.FactionCreationService;
-import com.massivecraft.factions.realfactions.RealFactionsEconomyService;
 import com.massivecraft.factions.realfactions.RealFactionsServices;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Role;
@@ -68,10 +67,7 @@ public class CmdCreate extends FCommand {
         }
 
         // if economy is enabled, they're not on the bypass list, and this command has a cost set, make sure they can pay
-        RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
-        RealFactionsEconomyService economy = services.economy();
-        if (economy.applyCommandEconomyCosts()
-                && !context.canAffordCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE.toString())) {
+        if (!context.canAffordCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE.toString())) {
             return;
         }
 
@@ -89,11 +85,11 @@ public class CmdCreate extends FCommand {
         }
 
         // then make 'em pay (if applicable)
-        if (economy.applyCommandEconomyCosts()
-                && !context.payForCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE, TL.COMMAND_CREATE_FORCREATE)) {
+        if (!context.payForCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE, TL.COMMAND_CREATE_FORCREATE)) {
             return;
         }
 
+        RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
         final ReserveObject reservedTag = factionReserve;
         final FactionCreationService creation = services.factionCreation();
         creation.create(faction -> {

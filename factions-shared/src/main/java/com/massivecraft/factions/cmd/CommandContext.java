@@ -198,14 +198,8 @@ public class CommandContext {
     }
 
     public boolean payForCommand(double cost, String toDoThis, String forDoingThis) {
-        if (!Econ.shouldBeUsed() || fPlayer == null || cost == 0.0 || fPlayer.isAdminBypassing()) {
-            return true;
-        }
-        if (Conf.bankEnabled && Conf.bankFactionPaysCosts && fPlayer.hasFaction()) {
-            return Econ.modifyMoney(faction, -cost, toDoThis, forDoingThis);
-        } else {
-            return Econ.modifyMoney(fPlayer, -cost, toDoThis, forDoingThis);
-        }
+        return FactionsPlugin.getInstance().getRealFactionsServices().economy()
+                .payCommandCost(fPlayer, faction, cost, toDoThis, forDoingThis);
     }
 
     public boolean payForCommand(double cost, TL toDoThis, TL forDoingThis) {
@@ -213,14 +207,8 @@ public class CommandContext {
     }
 
     public boolean canAffordCommand(double cost, String toDoThis) {
-        if (!Econ.shouldBeUsed() || fPlayer == null || cost == 0.0 || fPlayer.isAdminBypassing()) {
-            return true;
-        }
-        if (Conf.bankEnabled && Conf.bankFactionPaysCosts && fPlayer.hasFaction()) {
-            return Econ.hasAtLeast(faction, cost, toDoThis);
-        } else {
-            return Econ.hasAtLeast(fPlayer, cost, toDoThis);
-        }
+        return FactionsPlugin.getInstance().getRealFactionsServices().economy()
+                .canAffordCommandCost(fPlayer, faction, cost, toDoThis);
     }
 
     public void doWarmUp(WarmUpUtil.Warmup warmup, TL translationKey, String action, Runnable runnable, long delay) {

@@ -9,6 +9,7 @@ import com.massivecraft.factions.event.FactionDisbandEvent.PlayerDisbandReason;
 import com.massivecraft.factions.iface.EconomyParticipator;
 import com.massivecraft.factions.iface.RelationParticipator;
 import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.realfactions.RealFactionsEconomyService;
 import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import com.massivecraft.factions.scoreboards.FScoreboard;
 import com.massivecraft.factions.scoreboards.sidebar.FInfoSidebar;
@@ -720,7 +721,7 @@ public abstract class MemoryFPlayer implements FPlayer {
         };
 
         if (Bukkit.isPrimaryThread()) regen.run();
-        else Bukkit.getScheduler().runTask(FactionsPlugin.getInstance(), regen);
+        else FactionsPlugin.getInstance().getFactionScheduler().runGlobal(regen);
     }
 
     public void losePowerFromBeingOffline() {
@@ -822,7 +823,8 @@ public abstract class MemoryFPlayer implements FPlayer {
 
     public void leave(boolean makePay) {
         Faction myFaction = this.getFaction();
-        makePay = makePay && Econ.shouldBeUsed() && !this.isAdminBypassing();
+        RealFactionsEconomyService economy = FactionsPlugin.getInstance().getRealFactionsServices().economy();
+        makePay = makePay && economy.applyCommandEconomyCosts() && !this.isAdminBypassing();
 
         if (myFaction == null) {
             resetFactionData();
@@ -842,14 +844,14 @@ public abstract class MemoryFPlayer implements FPlayer {
         }
 
         // if economy is enabled and they're not on the bypass list, make sure they can pay
-        if (makePay && !Econ.hasAtLeast(this, Conf.econCostLeave, TL.LEAVE_TOLEAVE.toString())) return;
+        if (makePay && !economy.hasAtLeast(this, Conf.econCostLeave, TL.LEAVE_TOLEAVE.toString())) return;
         FPlayerLeaveEvent leaveEvent = new FPlayerLeaveEvent(this, myFaction, FPlayerLeaveEvent.PlayerLeaveReason.LEAVE);
         Bukkit.getServer().getPluginManager().callEvent(leaveEvent);
         if (leaveEvent.isCancelled()) return;
 
 
         // then make 'em pay (if applicable)
-        if (makePay && !Econ.modifyMoney(this, -Conf.econCostLeave, TL.LEAVE_TOLEAVE.toString(), TL.LEAVE_FORLEAVE.toString()))
+        if (makePay && !economy.modifyMoney(this, -Conf.econCostLeave, TL.LEAVE_TOLEAVE.toString(), TL.LEAVE_FORLEAVE.toString()))
             return;
 
         // Am I the last one in the faction?
@@ -863,8 +865,8 @@ public abstract class MemoryFPlayer implements FPlayer {
                 }
             }
             // Transfer all money
-            if (Econ.shouldBeUsed())
-                Econ.transferMoney(this, myFaction, this, myFaction.getFactionBalance());
+            if (economy.isEconomyEnabled())
+                economy.transferMoney(this, myFaction, this, myFaction.getFactionBalance());
 
         }
 
@@ -1082,17 +1084,16 @@ public abstract class MemoryFPlayer implements FPlayer {
             return false;
         }
 
-        if (Econ.shouldBeUsed()) {
+        RealFactionsEconomyService economy = FactionsPlugin.getInstance().getRealFactionsServices().economy();
+        if (economy.applyCommandEconomyCosts()) {
             double refund = Econ.calculateClaimRefund(getFaction().getLandRounded());
 
             if (Conf.bankEnabled && Conf.bankFactionPaysLandCosts) {
                 if (Econ.depositFactionBalance(this.getFaction(), refund)) {
                     this.getFaction().msg(TL.COMMAND_MONEY_GAINED, TextUtil.parse("&aYour faction"), moneyString(refund), TL.COMMAND_UNCLAIM_FORUNCLAIM.toString());
                 }
-            } else {
-                if (!Econ.modifyMoney(this, refund, TL.COMMAND_UNCLAIM_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIM_FORUNCLAIM.toString())) {
-                    return false;
-                }
+            } else if (!economy.modifyMoney(this, refund, TL.COMMAND_UNCLAIM_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIM_FORUNCLAIM.toString())) {
+                return false;
             }
         }
 
@@ -1527,7 +1528,8 @@ public abstract class MemoryFPlayer implements FPlayer {
         }
 
         // if economy is enabled, and they're not on the bypass list, make sure they can pay
-        boolean mustPay = Econ.shouldBeUsed() && !this.isAdminBypassing() && !forFaction.isSafeZone() && !forFaction.isWarZone() && (Conf.econCostClaimWilderness != 0.0);
+        RealFactionsEconomyService economy = FactionsPlugin.getInstance().getRealFactionsServices().economy();
+        boolean mustPay = economy.applyCommandEconomyCosts() && !this.isAdminBypassing() && !forFaction.isSafeZone() && !forFaction.isWarZone() && (Conf.econCostClaimWilderness != 0.0);
         double cost = 0.0;
         EconomyParticipator payee = null;
         if (mustPay) {
@@ -1543,7 +1545,7 @@ public abstract class MemoryFPlayer implements FPlayer {
                 payee = this;
             }
 
-            if (!Econ.hasAtLeast(payee, cost, TL.CLAIM_TOCLAIM.toString())) {
+            if (!economy.hasAtLeast(payee, cost, TL.CLAIM_TOCLAIM.toString())) {
                 return false;
             }
         }
@@ -1563,7 +1565,7 @@ public abstract class MemoryFPlayer implements FPlayer {
         // then make 'em pay (if applicable)
         if (mustPay) {
             if (payee == this) {
-                if (!Econ.modifyMoney(payee, -cost, TL.CLAIM_TOCLAIM.toString(), TL.CLAIM_FORCLAIM.toString())) {
+                if (!economy.modifyMoney(payee, -cost, TL.CLAIM_TOCLAIM.toString(), TL.CLAIM_FORCLAIM.toString())) {
                     return false;
                 }
             } else {
@@ -1580,7 +1582,7 @@ public abstract class MemoryFPlayer implements FPlayer {
         if (currentFaction.isNormal() && currentFaction.hasLandInflation()) {
             // Give them money for over claiming.
             if (payee == this) {
-                Econ.modifyMoney(payee, Conf.econOverclaimRewardMultiplier, TL.CLAIM_TOOVERCLAIM.toString(), TL.CLAIM_FOROVERCLAIM.toString());
+                economy.modifyMoney(payee, Conf.econOverclaimRewardMultiplier, TL.CLAIM_TOOVERCLAIM.toString(), TL.CLAIM_FOROVERCLAIM.toString());
             } else if (Conf.econOverclaimRewardMultiplier > 0.0) {
                 Econ.depositFactionBalance(this.getFaction(), Conf.econOverclaimRewardMultiplier);
                 this.getFaction().msg(TL.COMMAND_MONEY_GAINED, TextUtil.parse("&aYour faction"), Conf.econOverclaimRewardMultiplier, TL.CLAIM_FOROVERCLAIM.toString());

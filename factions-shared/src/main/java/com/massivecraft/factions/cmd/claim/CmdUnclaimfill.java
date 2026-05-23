@@ -10,6 +10,7 @@ import com.massivecraft.factions.cmd.CommandRequirements;
 import com.massivecraft.factions.cmd.FCommand;
 import com.massivecraft.factions.event.LandUnclaimEvent;
 import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.realfactions.RealFactionsEconomyService;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.util.Logger;
 import com.massivecraft.factions.zcore.fperms.Access;
@@ -131,10 +132,11 @@ public class CmdUnclaimfill extends FCommand {
             context.msg(TL.COMMAND_UNCLAIMFILL_BYPASSCOMPLETE, tracker.count());
         } else {
             if (tracker.refund != 0) {
+                RealFactionsEconomyService economy = FactionsPlugin.getInstance().getRealFactionsServices().economy();
                 if (Conf.bankEnabled && Conf.bankFactionPaysLandCosts) {
-                    Econ.modifyMoney(context.faction, tracker.refund, TL.COMMAND_UNCLAIM_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIM_FORUNCLAIM.toString());
+                    economy.modifyMoney(context.faction, tracker.refund, TL.COMMAND_UNCLAIM_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIM_FORUNCLAIM.toString());
                 } else {
-                    Econ.modifyMoney(context.fPlayer, tracker.refund, TL.COMMAND_UNCLAIM_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIM_FORUNCLAIM.toString());
+                    economy.modifyMoney(context.fPlayer, tracker.refund, TL.COMMAND_UNCLAIM_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIM_FORUNCLAIM.toString());
                 }
             }
             currentFaction.msg(TL.COMMAND_UNCLAIMFILL_UNCLAIMED, context.fPlayer.describeTo(currentFaction, true), tracker.count(), x + "," + z);

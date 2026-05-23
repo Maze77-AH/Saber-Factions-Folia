@@ -19,7 +19,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.scheduler.BukkitTask;
+import com.massivecraft.factions.realfactions.RealFactionsEconomyService;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -38,8 +39,8 @@ public class MissionGUI implements FactionGUI {
     private final Inventory inventory;
     private final Map<Integer, String> slots;
 
-    BukkitTask updateItemsTask = null;
-    BukkitTask cancelTask = null;
+    ScheduledTaskHandle updateItemsTask = null;
+    ScheduledTaskHandle cancelTask = null;
 
 
     public MissionGUI(FactionsPlugin plugin, FPlayer fPlayer) {
@@ -58,11 +59,11 @@ public class MissionGUI implements FactionGUI {
             cancelTask.cancel();
         //Because of what's mentioned before, we check on the next tick if the inventory that the player
         //is currently viewing is the same as this GUI, if it isn't, the updateItemsTask gets cancelled
-        cancelTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if(player.getOpenInventory().getTopInventory() != inventory)
-                if (updateItemsTask != null)
-                    updateItemsTask.cancel();
-        }, 1);
+        cancelTask = plugin.getFactionScheduler().runForEntityLater(player, () -> {
+            if (player.getOpenInventory().getTopInventory() != inventory && updateItemsTask != null) {
+                updateItemsTask.cancel();
+            }
+        }, 1L);
     }
 
 
@@ -89,16 +90,15 @@ public class MissionGUI implements FactionGUI {
                         return;
                     }
                 } else {
+                    RealFactionsEconomyService economy = FactionsPlugin.getInstance().getRealFactionsServices().economy();
                     if (Conf.bankEnabled && FactionsPlugin.getInstance().getFileManager().getMissions().getConfig().getBoolean("FactionPaysCancelMissionCost", false)) {
                         if (Econ.withdrawFactionBalance(faction, cost)) {
                             fPlayer.msg("<h>%s<i> lost <h>%s<i> %s.", TextUtil.parse("&aYour faction"), moneyString(cost), TL.MISSION_FORCANCEL.toString());
                         } else {
                             fPlayer.msg("<h>%s<i> can't afford <h>%s<i> %s.", TextUtil.parse("&aYour faction"), moneyString(cost), TL.MISSION_TOCANCEL.toString());
                         }
-                    } else {
-                        if (!Econ.modifyMoney(fPlayer, -cost, TL.MISSION_TOCANCEL.toString(), TL.MISSION_FORCANCEL.toString())) {
-                            return;
-                        }
+                    } else if (!economy.modifyMoney(fPlayer, -cost, TL.MISSION_TOCANCEL.toString(), TL.MISSION_FORCANCEL.toString())) {
+                        return;
                     }
                 }
             }
@@ -244,8 +244,10 @@ public class MissionGUI implements FactionGUI {
                                                 TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(timeTillDeadline)))));
 
 
-                        if(updateItemsTask == null)
-                            updateItemsTask = Bukkit.getScheduler().runTaskTimer(plugin, this::updateGUI, 20L, 20L);
+                        if (updateItemsTask == null && fPlayer.getPlayer() != null) {
+                            updateItemsTask = plugin.getFactionScheduler().runForEntityTimer(
+                                    fPlayer.getPlayer(), this::updateGUI, 20L, 20L);
+                        }
                     }
 
                     if (plugin.getFileManager().getMissions().getConfig().getBoolean("Allow-Cancellation-Of-Missions")) {

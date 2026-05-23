@@ -64,9 +64,10 @@ public class CmdUnclaimall extends FCommand {
             return;
         }
 
-        if (Econ.shouldBeUsed()) {
+        if (FactionsPlugin.getInstance().getRealFactionsServices().economy().isEconomyEnabled()) {
             double refund = Econ.calculateTotalLandRefund(target.getLandRounded());
-            if (!Econ.modifyMoney(target, refund, TL.COMMAND_UNCLAIMALL_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIMALL_FORUNCLAIM.toString())) {
+            if (!FactionsPlugin.getInstance().getRealFactionsServices().economy()
+                    .modifyMoney(target, refund, TL.COMMAND_UNCLAIMALL_TOUNCLAIM.toString(), TL.COMMAND_UNCLAIMALL_FORUNCLAIM.toString())) {
                 return;
             }
         }
