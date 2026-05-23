@@ -1,6 +1,5 @@
 package com.massivecraft.factions.cmd;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.FLocation;
 import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
@@ -31,7 +30,9 @@ public class CmdSeeChunk extends FCommand {
 
     //I remade it cause of people getting mad that I had the same seechunk as drtshock
 
-    private Material air;
+    // Resolved lazily through Bukkit's name registry to avoid shaded XMaterial <clinit>
+    // (which fails to parse the server version on MC 26 / Folia). Both fields fall back
+    // to AIR if the running runtime does not expose the modern material name.
     private Material redstoneLamp;
     private Material blackStainedGlass;
 
@@ -40,9 +41,6 @@ public class CmdSeeChunk extends FCommand {
 
     public CmdSeeChunk() {
         super();
-        air = XMaterial.AIR.parseMaterial();
-        redstoneLamp = XMaterial.REDSTONE_LAMP.parseMaterial();
-        blackStainedGlass = XMaterial.BLACK_STAINED_GLASS.parseMaterial();
 
         getAliases().addAll(Aliases.seeChunk);
 
@@ -53,6 +51,28 @@ public class CmdSeeChunk extends FCommand {
                 .playerOnly()
                 .build());
 
+    }
+
+    private Material redstoneLamp() {
+        if (redstoneLamp == null) {
+            Material match = Material.matchMaterial("REDSTONE_LAMP");
+            if (match == null) {
+                match = Material.matchMaterial("REDSTONE_LAMP_ON");
+            }
+            redstoneLamp = match != null ? match : Material.AIR;
+        }
+        return redstoneLamp;
+    }
+
+    private Material blackStainedGlass() {
+        if (blackStainedGlass == null) {
+            Material match = Material.matchMaterial("BLACK_STAINED_GLASS");
+            if (match == null) {
+                match = Material.matchMaterial("STAINED_GLASS");
+            }
+            blackStainedGlass = match != null ? match : Material.AIR;
+        }
+        return blackStainedGlass;
     }
 
     @Override
@@ -125,7 +145,7 @@ public class CmdSeeChunk extends FCommand {
             //if (useParticles) {
             //    new ParticleBuilder(this.effect, block.getLocation().add(0.5, 0, 0.5)).setColor(Color.RED).display(player);
             //} else {
-                VisualizeUtil.addLocation(player, block.getLocation(), y % 5 == 0 ? this.redstoneLamp : this.blackStainedGlass);
+                VisualizeUtil.addLocation(player, block.getLocation(), y % 5 == 0 ? redstoneLamp() : blackStainedGlass());
            // }
         }
     }
