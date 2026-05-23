@@ -120,6 +120,11 @@ public class FLogManager {
             Bukkit.getLogger().info("Ignoring saveLogs due to saving==true!");
             return;
         }
+        if (logFile == null) {
+            // setupLogFile() never ran (e.g. plugin enable aborted before loadLogs).
+            // Avoid NullPointerException from JSONUtils.saveJSONToFile on a null target.
+            return;
+        }
 
         saving = true;
 

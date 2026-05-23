@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.util.Cooldown;
 import com.massivecraft.factions.util.Lazy;
 import com.massivecraft.factions.util.TimeUtil;
@@ -16,11 +15,12 @@ import org.saberdev.corex.CoreX;
 @CoreAddon(configVariable = "God-Apple-Cooldown")
 public class GappleCooldown implements Listener {
 
-    private final Lazy<Material> enchantedGoldenApple = Lazy.of(XMaterial.ENCHANTED_GOLDEN_APPLE::parseMaterial);
+    private final Lazy<Material> enchantedGoldenApple = Lazy.of(() -> Material.matchMaterial("ENCHANTED_GOLDEN_APPLE"));
 
     @EventHandler
     public void onEatGapple(PlayerItemConsumeEvent e){
-        if(e.getItem().getType() == this.enchantedGoldenApple.get()) {
+        Material target = this.enchantedGoldenApple.get();
+        if(target != null && e.getItem().getType() == target) {
             if(Cooldown.isOnCooldown(e.getPlayer(), "godAppleCooldown")) {
                 e.setCancelled(true);
                 long remaining = e.getPlayer().getMetadata("godAppleCooldown").get(0).asLong() - System.currentTimeMillis();

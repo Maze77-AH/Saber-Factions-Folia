@@ -25,14 +25,25 @@ public class CoreX {
 
         for (Class<?> clazz : annotatedClasses) {
             CoreAddon annotation = clazz.getAnnotation(CoreAddon.class);
-            if (annotation != null) {
-                String featureName = annotation.configVariable();
-                try {
-                    Listener listener = (Listener) clazz.newInstance();
-                    registerFeature(initializedFeatures, featureName, listener);
-                } catch (InstantiationException | IllegalAccessException e) {
-                    e.printStackTrace();
+            if (annotation == null) {
+                continue;
+            }
+            String featureName = annotation.configVariable();
+            // Per-addon Throwable guard: a single addon failing in <clinit> (e.g. shaded
+            // XSeries failing to parse the running MC version on Folia/MC 26) must not
+            // abort the rest of CoreX init or the plugin enable.
+            try {
+                Listener listener = (Listener) clazz.getDeclaredConstructor().newInstance();
+                registerFeature(initializedFeatures, featureName, listener);
+            } catch (Throwable t) {
+                Throwable root = t;
+                while (root.getCause() != null && root.getCause() != root) {
+                    root = root.getCause();
                 }
+                Logger.print(
+                        "Skipping CoreX addon " + clazz.getSimpleName() + " (" + featureName + "): "
+                                + root.getClass().getSimpleName() + ": " + root.getMessage(),
+                        Logger.PrefixType.WARNING);
             }
         }
 

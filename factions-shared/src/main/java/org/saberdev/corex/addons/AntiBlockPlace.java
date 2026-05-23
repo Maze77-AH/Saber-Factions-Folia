@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -19,7 +18,7 @@ public class AntiBlockPlace implements Listener {
     @EventHandler
     public void onDeniedPlace(BlockPlaceEvent e) {
         Player player = e.getPlayer();
-        if(!player.isOp() && deniedMatList.contains(XMaterial.matchXMaterial(e.getBlockPlaced().getType().name()).get().name())) {
+        if (!player.isOp() && deniedMatList.contains(e.getBlockPlaced().getType().name())) {
             e.setCancelled(true);
         }
     }

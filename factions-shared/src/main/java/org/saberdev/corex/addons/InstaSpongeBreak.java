@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.*;
 import com.massivecraft.factions.util.Lazy;
 import org.bukkit.Material;
@@ -15,7 +14,7 @@ import org.saberdev.corex.CoreAddon;
 @CoreAddon(configVariable = "Insta-Sponge-Break")
 public class InstaSpongeBreak implements Listener {
 
-    private final Lazy<Material> sponge = Lazy.of(XMaterial.SPONGE::parseMaterial);
+    private final Lazy<Material> sponge = Lazy.of(() -> Material.matchMaterial("SPONGE"));
 
     @EventHandler
     public void onClick(PlayerInteractEvent event) {
@@ -23,8 +22,12 @@ public class InstaSpongeBreak implements Listener {
         if (event.getAction() != Action.LEFT_CLICK_BLOCK) {
             return;
         }
+        Material target = this.sponge.get();
+        if (target == null) {
+            return;
+        }
         Block block = event.getClickedBlock();
-        if (block != null && block.getType() == this.sponge.get()) {
+        if (block != null && block.getType() == target) {
             FPlayer fPlayer = FPlayers.getInstance().getByPlayer(player);
 
             Faction location = Board.getInstance().getFactionAt(FLocation.wrap(block.getLocation()));

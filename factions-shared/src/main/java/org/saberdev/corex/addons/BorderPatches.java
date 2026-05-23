@@ -1,10 +1,11 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XEntityType;
+import com.massivecraft.factions.util.Lazy;
 import org.bukkit.Location;
 import org.bukkit.WorldBorder;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -21,6 +22,22 @@ import org.saberdev.corex.CoreAddon;
 
 @CoreAddon(configVariable = "Border-Patches")
 public class BorderPatches implements Listener {
+
+    // Resolved lazily via Bukkit's own EntityType registry so this addon does not
+    // pull in shaded XSeries (which fails its server-version <clinit> on MC 26).
+    // "TNT" is the modern Bukkit name (since 1.20.5); "PRIMED_TNT" is the legacy name.
+    private final Lazy<EntityType> tnt = Lazy.of(() -> resolveEntityType("TNT", "PRIMED_TNT"));
+
+    private static EntityType resolveEntityType(String... names) {
+        for (String name : names) {
+            try {
+                return EntityType.valueOf(name);
+            } catch (IllegalArgumentException ignored) {
+                // Try next alias.
+            }
+        }
+        return null;
+    }
 
     @EventHandler(
             priority = EventPriority.NORMAL,
@@ -164,7 +181,8 @@ public class BorderPatches implements Listener {
             ignoreCancelled = true
     )
     public void onTntExplode(ExplosionPrimeEvent e) {
-        if (e.getEntity().getType() == XEntityType.TNT.get() && this.isOutsideWorldBorder(e.getEntity(), true)) {
+        EntityType target = this.tnt.get();
+        if (target != null && e.getEntity().getType() == target && this.isOutsideWorldBorder(e.getEntity(), true)) {
             e.setCancelled(true);
             e.getEntity().remove();
         }

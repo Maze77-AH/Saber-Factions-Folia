@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.util.Logger;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -22,21 +21,32 @@ import java.util.HashSet;
 @CoreAddon(configVariable = "Anti-Dupe")
 public class AntiDupe implements Listener {
 
+    private Material lilyPad;
+
+    private Material lilyPad() {
+        if (lilyPad == null) {
+            Material match = Material.matchMaterial("LILY_PAD");
+            lilyPad = match != null ? match : Material.AIR;
+        }
+        return lilyPad;
+    }
+
     @EventHandler
     public void playerVaultDupeGlitch(PlayerCommandPreprocessEvent event) {
         if (event.getMessage().startsWith("/playervault") || event.getMessage().startsWith("/pv")) {
             Player player = event.getPlayer();
+            Material target = lilyPad();
             Block headLocation = player.getEyeLocation().getBlock();
             if (headLocation != null) {
                 Material type = headLocation.getType();
-                if (type == XMaterial.LILY_PAD.parseMaterial() || type.name().contains("TRAPDOOR")) {
+                if ((target != Material.AIR && type == target) || type.name().contains("TRAPDOOR")) {
                     event.setCancelled(true);
                 }
             }
             Block bodyLocation = player.getLocation().getBlock();
             if (bodyLocation != null) {
                 Material type = bodyLocation.getType();
-                if (type == XMaterial.LILY_PAD.parseMaterial() || type.name().contains("TRAPDOOR")) {
+                if ((target != Material.AIR && type == target) || type.name().contains("TRAPDOOR")) {
                     event.setCancelled(true);
                 }
             }

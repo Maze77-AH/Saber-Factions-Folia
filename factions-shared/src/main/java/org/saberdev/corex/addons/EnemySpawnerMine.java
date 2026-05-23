@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.FPlayers;
 import com.massivecraft.factions.struct.Relation;
@@ -19,11 +18,15 @@ import org.saberdev.corex.CoreX;
 @CoreAddon(configVariable = "Enemy-Spawner-Mine")
 public class EnemySpawnerMine implements Listener {
 
-    private final Lazy<Material> spawner = Lazy.of(XMaterial.SPAWNER::parseMaterial);
+    private final Lazy<Material> spawner = Lazy.of(() -> {
+        Material match = Material.matchMaterial("SPAWNER");
+        return match != null ? match : Material.matchMaterial("MOB_SPAWNER");
+    });
 
     @EventHandler
     public void onSpawnerMine(BlockBreakEvent e) {
-        if (e.getBlock().getType() == this.spawner.get()) {
+        Material target = this.spawner.get();
+        if (target != null && e.getBlock().getType() == target) {
             if (!e.getPlayer().hasPermission("sabercore.spawnermine.bypass") && hasEnemiesNear(e.getPlayer(), CoreX.getConfig().fetchDouble("AntiSpawnerMine.Radius"))) {
                 e.setCancelled(true);
             }

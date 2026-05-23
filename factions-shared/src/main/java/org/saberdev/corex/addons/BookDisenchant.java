@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -22,11 +21,25 @@ public class BookDisenchant implements Listener {
 
     private static ItemStack EMPTY_BOOK = new ItemStack(Material.BOOK, 1);
 
+    private Material enchantingTable;
+
+    private Material enchantingTable() {
+        if (enchantingTable == null) {
+            Material match = Material.matchMaterial("ENCHANTING_TABLE");
+            if (match == null) {
+                match = Material.matchMaterial("ENCHANTMENT_TABLE");
+            }
+            enchantingTable = match != null ? match : Material.AIR;
+        }
+        return enchantingTable;
+    }
+
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
     public void onPlayerInteract(PlayerInteractEvent event) {
         if ((event.getAction() == Action.LEFT_CLICK_BLOCK) && (event.hasItem())) {
             Player player = event.getPlayer();
-            if ((event.getClickedBlock().getType() == XMaterial.ENCHANTING_TABLE.parseMaterial()) && (player.getGameMode() != GameMode.CREATIVE)) {
+            Material target = enchantingTable();
+            if ((target != Material.AIR && event.getClickedBlock().getType() == target) && (player.getGameMode() != GameMode.CREATIVE)) {
                 ItemStack stack = event.getItem();
                 if ((stack != null) && (stack.getType() == Material.ENCHANTED_BOOK)) {
                     ItemMeta meta = stack.getItemMeta();

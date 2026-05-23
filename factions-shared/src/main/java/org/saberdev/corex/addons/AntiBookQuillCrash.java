@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -13,7 +12,16 @@ import org.saberdev.corex.CoreAddon;
 @CoreAddon(configVariable = "Anti-Book-Quill-Crash")
 public class AntiBookQuillCrash implements Listener {
 
-    private static final Material WRITTABLE_BOOK = XMaterial.WRITABLE_BOOK.parseMaterial();
+    // Resolved lazily so this addon does not pull in shaded XMaterial during <clinit>.
+    private Material writableBook;
+
+    private Material writableBook() {
+        if (writableBook == null) {
+            Material match = Material.matchMaterial("WRITABLE_BOOK");
+            writableBook = match != null ? match : Material.AIR;
+        }
+        return writableBook;
+    }
 
     @EventHandler
     public void onAttemptCrash(PlayerInteractEvent event) {
@@ -22,7 +30,8 @@ public class AntiBookQuillCrash implements Listener {
         }
         Player player = event.getPlayer();
         ItemStack item = player.getItemInHand();
-        if (item != null && item.getType() == WRITTABLE_BOOK) {
+        Material target = writableBook();
+        if (target != Material.AIR && item != null && item.getType() == target) {
             event.setCancelled(true);
         }
     }

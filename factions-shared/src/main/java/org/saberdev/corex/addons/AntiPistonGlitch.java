@@ -1,6 +1,5 @@
 package org.saberdev.corex.addons;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.util.Lazy;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -18,12 +17,22 @@ import java.util.Set;
 @CoreAddon(configVariable = "Anti-Piston-Glitch")
 public class AntiPistonGlitch implements Listener {
 
-    private final Lazy<Set<Material>> materials = Lazy.of(() -> Collections.unmodifiableSet(new HashSet<Material>(){{
-        add(XMaterial.SUGAR_CANE.parseMaterial());
-        add(XMaterial.MELON.parseMaterial());
-        add(XMaterial.MELON_STEM.parseMaterial());
-        add(XMaterial.GLISTERING_MELON_SLICE.parseMaterial());
-    }}));
+    // Resolved lazily through Bukkit's name registry to avoid shaded XMaterial <clinit> on MC 26.
+    private final Lazy<Set<Material>> materials = Lazy.of(() -> {
+        Set<Material> set = new HashSet<>();
+        addMaterialByName(set, "SUGAR_CANE");
+        addMaterialByName(set, "MELON");
+        addMaterialByName(set, "MELON_STEM");
+        addMaterialByName(set, "GLISTERING_MELON_SLICE");
+        return Collections.unmodifiableSet(set);
+    });
+
+    private static void addMaterialByName(Set<Material> target, String name) {
+        Material material = Material.matchMaterial(name);
+        if (material != null) {
+            target.add(material);
+        }
+    }
 
     @EventHandler
     public void onRetract(BlockPistonExtendEvent event) {
