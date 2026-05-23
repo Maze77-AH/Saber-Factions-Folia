@@ -1,48 +1,208 @@
-# SaberFactions
+# RealFactions
 
-![Downloads](https://img.shields.io/github/downloads/saberllc/saber-factions/total.svg) [![CodeFactor](https://www.codefactor.io/repository/github/driftay/saber-factions/badge)](https://www.codefactor.io/repository/github/driftay/saber-factions) [![License](https://img.shields.io/badge/license-GNU%20General%20Public%20License%20v3.0-brightgreen)](https://github.com/SaberLLC/Saber-Factions/blob/1.6.x/LICENSE) ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/SaberLLC/Saber-Factions) [![](https://jitpack.io/v/SaberLLC/Saber-Factions.svg)](https://jitpack.io/#SaberLLC/Saber-Factions)
+![Minecraft](https://img.shields.io/badge/Minecraft-1.21+-brightgreen)
+![Platform](https://img.shields.io/badge/Platform-Paper%20%7C%20Purpur%20%7C%20Folia-blue)
+![License](https://img.shields.io/badge/license-GNU%20GPL%20v3.0-brightgreen)
+![Status](https://img.shields.io/badge/status-active%20development-orange)
+![Performance](https://img.shields.io/badge/focus-performance%20%26%20scalability-purple)
 
-Welcome to SaberFactions, an exotic, performance-optimized, and feature-rich factions plugin dedicated to enhancing the player experience while keeping the cost at nothing. We are committed to continually developing SaberFactions to meet the needs of the growing factions community and attract new players every day.
+RealFactions is a modernized, performance-focused continuation of the classic factions experience built for modern Minecraft servers.
 
-## Exciting Features
-Explore our exciting features:
+Originally based on SaberFactions, RealFactions is being actively refactored and upgraded for modern Paper/Purpur/Folia environments with a focus on scalability, maintainability, and long-term production stability.
 
-- **Factions Grace Period**: Temporarily deny raiding between factions.
-- **Factions Alt System**: Allow alts to join a faction and perform tasks while players enjoy the raid.
-- **Factions AntiSpam System**: Suppress spammy faction commands.
-- **More F Upgrades**: Unbreakable Redstone Upgrade, Members Upgrade, and Power Upgrade.
-- **Factions Corner**: Claim your entire buffer with ease.
-- **Command Cooldowns**: Configurable cooldowns for spam commands.
-- **Faction Points**: A currency for all factions gameplay.
-- **Faction Shop**: Buy in-game items with faction points.
-- **Faction Missions**: Challenge your players with exciting missions.
-- **Faction Discord Integration**: Personalized discord bot for each faction.
-- **Faction Audit**: Detailed logging system to monitor faction activities.
-- **Factions Check System**: Automated alerts for checking walls/buffers.
-- **Faction Reserves**: Reserve faction names for specific players.
+The project prioritizes:
 
-## Dependency With Maven
-```	
-    <repository>
-	    <id>jitpack.io</id>
-	    <url>https://jitpack.io</url>
-    </repository>
-    
-    <dependency>
-        <groupId>com.github.SaberLLC</groupId>
-        <artifactId>Saber-Factions</artifactId>
-        <version>1.6.x-SNAPSHOT</version>
-    </dependency>
+- Modern Minecraft compatibility
+- Folia-aware scheduling and threading
+- Performance under high player counts
+- Stability during raids and large faction activity
+- Clean architecture and maintainable internals
+- Compatibility with modern plugin ecosystems
+
+---
+
+# Features
+
+## Core Factions Gameplay
+- Land claiming
+- Power system
+- Raiding and territory control
+- Faction roles and permissions
+- Ally / truce / enemy relationships
+- Faction homes
+- Wilderness and safezone support
+
+---
+
+## Advanced Systems
+- Grace periods
+- Faction missions
+- Faction points currency
+- Upgrades system
+- Audit logging
+- Wall/buffer check systems
+- Command cooldowns
+- Anti-spam protections
+- Alt support systems
+- Faction reserves
+- Internal FTOP support
+
+---
+
+## Modern Platform Support
+RealFactions is actively being adapted for:
+
+- Paper
+- Purpur
+- Folia
+
+### Folia Support Status
+Folia support is currently considered:
+
+```text
+Experimental / Staging Validation
 ```
 
-## Moving Forward
-We value community feedback and plan to incorporate suggestions into future releases. Our aim is to provide the latest and greatest factions/skyblock/prison plugins for Minecraft without compromise.
+The project includes:
+- Folia-aware schedulers
+- Region-thread-safe task routing
+- Runtime validation diagnostics
+- Strict-mode protections for unsafe integrations
 
-## Support
-Got a problem, question, or concern? Join our community Discord server and share your thoughts:
-[Join Saber Discord](https://discord.gg/saber)
+Production readiness testing is ongoing.
 
-We look forward to embarking on this journey with you!
+---
 
-Sincerely,
-The SaberDevelopment Support Team!
+# Performance Philosophy
+
+RealFactions is designed with large servers in mind.
+
+Key goals include:
+- Reduced synchronous main-thread work
+- Safer async handling
+- Cleaner scheduler abstractions
+- Lower tick impact during large raids
+- Modern API usage
+- Removal of legacy compatibility overhead where appropriate
+
+---
+
+# Compatibility
+
+## Supported Server Software
+- Paper
+- Purpur
+- Folia
+
+## Supported Minecraft Versions
+Modern Minecraft only.
+
+Legacy 1.8 compatibility is not a project priority.
+
+---
+
+# Integrations
+
+## Supported Integrations
+- Vault
+- EssentialsX
+- DiscordSRV
+- PlaceholderAPI
+- TAB
+- CoreX
+- HamsterAPI
+- ProtocolLib
+- PacketEvents
+
+Additional integrations may continue to evolve.
+
+---
+
+# Building
+
+## Maven
+
+```xml
+<repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+</repository>
+
+<dependency>
+    <groupId>com.github.Imagicast-Official</groupId>
+    <artifactId>RealFactions</artifactId>
+    <version>1.6.x-SNAPSHOT</version>
+</dependency>
+```
+
+---
+
+# Development
+
+## Current Focus Areas
+- Folia runtime stability
+- Scheduler modernization
+- Runtime diagnostics
+- XSeries/XMaterial removal
+- Async safety validation
+- Internal architecture cleanup
+- Performance profiling
+
+---
+
+# Runtime Diagnostics
+
+For Folia staging validation:
+
+```yaml
+realfactions:
+  validation-diagnostics: true
+  folia-strict-mode: true
+```
+
+Diagnostics help identify:
+- Unsafe scheduler usage
+- Region-thread violations
+- Unsafe economy integrations
+- Runtime mutation issues
+
+---
+
+# Contributing
+
+Contributions, testing reports, profiling results, and issue reports are welcome.
+
+When reporting issues, include:
+- Minecraft version
+- Server software/version
+- Full stack traces
+- Reproduction steps
+- Plugin list if relevant
+
+---
+
+# Support
+
+Community support and development discussion are handled through Discord and GitHub Issues.
+
+Please include:
+- Server version
+- RealFactions version
+- Reproduction details
+- Relevant logs
+
+---
+
+# Credits
+
+RealFactions is built upon years of work from the factions community and previous SaberFactions contributors.
+
+This project continues that foundation while modernizing the codebase for current and future Minecraft server platforms.
+
+---
+
+# License
+
+RealFactions is licensed under the GNU GPL v3 License.
+
+See `LICENSE` for details.
