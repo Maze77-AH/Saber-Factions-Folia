@@ -197,6 +197,40 @@ public final class RealFactionsEconomyService {
     }
 
     /**
+     * Transfer a disbanding faction's in-memory bank balance to the disbander. When economy is
+     * disabled by Folia strict mode the payout is skipped and disband may continue. Matches legacy
+     * behaviour where disband proceeds even if the transfer fails.
+     */
+    public boolean transferDisbandHoldings(FPlayer disbander, Faction faction) {
+        if (disbander == null) {
+            return true;
+        }
+        double amount = faction.getFactionBalance();
+        if (amount <= 0.0D) {
+            return true;
+        }
+        if (!isEconomyEnabled()) {
+            if (disabledByStrictMode) {
+                Logger.print("[RealFactions] foliaStrictMode: skipping disband bank payout of "
+                        + Econ.moneyString(amount) + " for " + faction.getTag()
+                        + " (economy provider not known Folia-safe).", Logger.PrefixType.WARNING);
+            }
+            return true;
+        }
+        return transferMoney(disbander, faction, disbander, amount, false);
+    }
+
+    /**
+     * Clear in-memory faction bank balance during teardown. Vault faction accounts are a no-op in
+     * legacy {@code Econ.setBalance}; this replaces that call for remove/disband cleanup.
+     */
+    public void clearFactionBalanceOnRemove(Faction faction) {
+        if (Conf.econEnabled) {
+            faction.setFactionBalance(0.0D);
+        }
+    }
+
+    /**
      * Refund a player command cost after a failed post-payment model write (for example faction
      * creation rollback). Runs on the economy thread when economy is active.
      */

@@ -8,6 +8,7 @@ import com.massivecraft.factions.event.FactionDisbandEvent.PlayerDisbandReason;
 import com.massivecraft.factions.iface.EconomyParticipator;
 import com.massivecraft.factions.iface.RelationParticipator;
 import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.realfactions.RealFactionsEconomyService;
 import com.massivecraft.factions.missions.Mission;
 import com.massivecraft.factions.scoreboards.FTeamWrapper;
 import com.massivecraft.factions.struct.BanInfo;
@@ -394,14 +395,11 @@ public abstract class MemoryFaction implements Faction, EconomyParticipator {
             Logger.print("The faction " + this.getTag() + " (" + this.getId() + ") was disbanded by " + (disbanderIsConsole ? "console command" : fdisbander.getName()) + ".", Logger.PrefixType.DEFAULT);
         }
 
-        if (Econ.shouldBeUsed() && !disbanderIsConsole) {
-            // Should we prevent to withdraw money if the faction was just created
-            //Give all the faction's money to the disbander
+        if (!disbanderIsConsole) {
+            RealFactionsEconomyService economy = FactionsPlugin.getInstance().getRealFactionsServices().economy();
             double amount = this.getFactionBalance();
-
-            Econ.transferMoney(fdisbander, this, fdisbander, amount, false);
-
-            if (amount > 0.0) {
+            economy.transferDisbandHoldings(fdisbander, this);
+            if (amount > 0.0 && economy.isEconomyEnabled()) {
                 String amountString = Econ.moneyString(amount);
                 msg(TL.COMMAND_DISBAND_HOLDINGS, amountString);
                 //TODO: Format this correctly and translate
@@ -1389,7 +1387,11 @@ public abstract class MemoryFaction implements Faction, EconomyParticipator {
     // Persistance and entity management
     // ----------------------------------------------//
     public void remove() {
-        if (Econ.shouldBeUsed()) Econ.setBalance(getAccountId(), 0.0);
+        if (FactionsPlugin.getInstance() != null && FactionsPlugin.getInstance().getRealFactionsServices() != null) {
+            FactionsPlugin.getInstance().getRealFactionsServices().economy().clearFactionBalanceOnRemove(this);
+        } else if (Conf.econEnabled) {
+            this.setFactionBalance(0.0D);
+        }
         // Clean the board
         ((MemoryBoard) Board.getInstance()).clean(id);
         for (FPlayer fPlayer : fplayers) fPlayer.resetFactionData(false);

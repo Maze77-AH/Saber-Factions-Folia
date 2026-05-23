@@ -4,6 +4,7 @@ import com.massivecraft.factions.Board;
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.FPlayers;
 import com.massivecraft.factions.Faction;
+import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.util.TitleUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -23,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * All rights reserved 2020.
  * Creation Date: 10/27/2020
  */
-public class AsyncPlayerMap implements Runnable, Listener {
+public class AsyncPlayerMap implements Listener {
 
     private final Map<String, Player> players = new ConcurrentHashMap<>();
     private final Map<String, Location> locations = new ConcurrentHashMap<>();
@@ -31,17 +32,18 @@ public class AsyncPlayerMap implements Runnable, Listener {
 
     public AsyncPlayerMap(Plugin bukkitPlugin) {
         Bukkit.getPluginManager().registerEvents(this, bukkitPlugin);
-        Bukkit.getScheduler().runTaskTimer(bukkitPlugin, this, 20L, 20L);
-    }
-
-    @Override
-    public void run() {
-        for (Player pl : server.getOnlinePlayers()) {
-            if(pl.isOnline()) {
-                processPlayer(pl);
-                updateLocation(pl);
+        // Global cadence only; per-player title/location work runs on each player's entity scheduler.
+        FactionsPlugin.getInstance().getFactionScheduler().runGlobalTimer(() -> {
+            for (Player pl : server.getOnlinePlayers()) {
+                if (!pl.isOnline()) {
+                    continue;
+                }
+                FactionsPlugin.getInstance().getFactionScheduler().runForEntity(pl, () -> {
+                    processPlayer(pl);
+                    updateLocation(pl);
+                });
             }
-        }
+        }, 20L, 20L);
     }
 
     private void processPlayer(Player pl) {

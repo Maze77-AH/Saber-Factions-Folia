@@ -777,6 +777,75 @@ highest-traffic economy command paths through the bridge and halved the raw sche
 disband bank payout, name-based `getOfflinePlayer(String)` in `Econ`, and 12 startup/integration
 scheduler sites remain. Paper/Purpur staging remains safe.
 
+## Phase 10: MemoryFaction Economy and Remaining High-Risk Schedulers
+
+Phase 10 clears the last legacy economy mutation sites and migrates the highest-value remaining
+raw scheduler usages. `folia-supported` remains disabled.
+
+### MemoryFaction economy strategy
+
+`MemoryFaction.disband()` and `remove()` were the last direct `Econ.transferMoney` / `Econ.setBalance`
+call sites outside the bridge.
+
+- **Disband bank payout** — routed through `RealFactionsEconomyService.transferDisbandHoldings()`.
+  Reads in-memory faction balance on the model thread, then delegates to `transferMoney()` on the
+  economy bridge. Under `foliaStrictMode` with a non-allowlisted Vault provider, payout is skipped
+  with a warning and disband still proceeds (matches legacy behaviour where transfer failure did not
+  block teardown). Holdings chat/log messages still appear when economy is enabled and balance was
+  &gt; 0 before payout, even if the transfer fails.
+- **Remove balance cleanup** — routed through `RealFactionsEconomyService.clearFactionBalanceOnRemove()`,
+  which clears in-memory faction bank balance only (legacy `Econ.setBalance` for faction accounts was
+  already a no-op against Vault).
+- **`/f disband`** — both console and player paths now run `faction.disband(...)` inside
+  `FactionOperationExecutor.runFactionWrite()` so teardown and economy reads stay on the model thread.
+
+### Raw scheduler sites migrated (Phase 10)
+
+- `AsyncPlayerMap` — **unsafe** global timer touching all online players for titles/locations; migrated
+  to global cadence + per-player entity scheduler (same pattern as `FlightEnhance`).
+- `TimerManager` — grace/war timer tick loop to `runGlobalTimer` (time checks only, no world access).
+- `FLogManager` — log timer maintenance to `runGlobalTimer` (pure in-memory map cleanup).
+- `JSONFPlayers` — async-load thread hop to `runGlobal` when not on primary thread.
+
+### Raw scheduler sites intentionally deferred
+
+- `FactionsPlugin` (2) — startup-only `runTaskLater` for faction-data preload and addon registry; no
+  player/world mutation during tick.
+- `EngineDynmap` (2) — integration-specific dynmap marker refresh; deferred until dynmap/Folia path is
+  validated separately.
+- `Metrics` (1) — bStats submit hop to main thread; metrics-only.
+
+After Phase 10 the audit scanner reports **5 raw scheduler usages across 3 files** (down from 12 / 8).
+
+### Audit test extended
+
+`RealFactionsFoliaAuditTest` now also:
+
+- Asserts legacy Econ mutation backlog stays at **0** (Phase 10 MemoryFaction migration).
+- Protects `MemoryFaction` from regressing to direct `Econ.transferMoney` / `Econ.setBalance`.
+- Protects Phase 10 scheduler-migrated files from regression.
+
+Current audit-scanner counts after Phase 10:
+
+- Direct `Board.getInstance()` write call sites outside the model/service: **0**.
+- Direct `Factions.createFaction()` call sites outside the creation service: **0**.
+- Unmigrated command model mutations: **0**.
+- Raw Bukkit scheduler usages outside the scheduler abstraction: **5** across **3** files (down from 12).
+- Legacy Econ mutation call sites outside the bridge: **0** (down from 2 in `MemoryFaction`).
+- Listener/task model-mutation backlog: **0**.
+
+### Folia verdict (updated)
+
+- **Paper/Purpur staging:** SAFE — unchanged; all Phase 10 changes preserve behaviour on single-thread Paper.
+- **Folia staging:** REASONABLE for developer test servers — economy bridge now covers all audited
+  mutation paths; high-risk player/entity scheduler sites (GUI, flight map, power regen, auto-leave) are
+  migrated. Remaining raw scheduler sites are startup/metrics/dynmap-only. Still not player-ready:
+  Vault provider Folia safety is not verified, dynmap integration uses raw scheduler, and end-to-end load
+  testing on Folia has not been done.
+- **Folia production:** UNSAFE — `folia-supported` stays disabled. Residual blockers: Vault/`Econ`
+  internals (`getOfflinePlayer(String)`), dynmap raw scheduler, no production load verification, model
+  is serialized through executor but not fully proven under concurrent region load.
+
 ## Build Results
 
 Baseline before edits:
@@ -878,6 +947,16 @@ After Phase 9:
 - `mvn -q clean package`
 - Result: success (exit code 0).
 
+After Phase 10:
+
+- `mvn -q test`
+- Result: success (exit code 0). Audit scanner reports 5 raw Bukkit scheduler usages across 3 files, 0
+  legacy Econ mutation sites outside the bridge, and 0 unmigrated command/listener/board/createFaction
+  backlog.
+
+- `mvn -q clean package`
+- Result: success (exit code 0).
+
 Target Java 25/Paper 26 profile check:
 
 - `mvn -q -Ppaper26-java25 -DskipTests clean package`
@@ -892,12 +971,13 @@ Local Java state:
 
 ## Staging And Production Safety Assessment
 
-This assessment reflects the state after Phase 9. Phase 8 completed faction creation and the economy
-bridge foundation. Phase 9 routed command costs, bank commands, claim/leave/unclaim economy paths, and
-key GUI costs through `RealFactionsEconomyService`, and migrated high-risk GUI/player/region scheduler
-sites (raw scheduler count 24 → 12). After Phase 9: 0 command model-write backlog, 12 raw scheduler
-sites (mostly startup/metrics/dynmap), 2 legacy Econ mutations in disband payout only. Folia production
-stays unsafe; `folia-supported` stays off.
+This assessment reflects the state after Phase 10. Phase 9 routed command costs, bank commands,
+claim/leave/unclaim economy paths, and key GUI costs through `RealFactionsEconomyService`, and migrated
+high-risk GUI/player/region scheduler sites (raw scheduler count 24 → 12). Phase 10 migrated the last
+legacy Econ mutations in `MemoryFaction` and the highest-value remaining unsafe scheduler sites (raw
+scheduler count 12 → 5). After Phase 10: 0 command/board/createFaction/listener/economy mutation backlog,
+5 raw scheduler sites (startup/metrics/dynmap only). Folia staging is now reasonable for dev/test;
+Folia production stays unsafe; `folia-supported` stays off.
 
 Paper / Purpur staging: SAFE. Recommended target.
 
@@ -905,18 +985,23 @@ Paper / Purpur staging: SAFE. Recommended target.
 - Vault, PlaceholderAPI, and the other integrations are unchanged.
 - All Phase 1-3 changes are behavior-preserving on Paper: the scheduler abstraction maps to the Bukkit main-thread scheduler. The only observable differences are a few operations that now complete on the next tick instead of inline (flight fall-damage cooldown, per-player unclaim cleanup, stuck highest-block lookup, chat-password handling). These are imperceptible in normal play.
 
-Folia staging (developer test server only): CONDITIONAL, NOT RECOMMENDED FOR PLAYERS.
+Folia staging (developer test server only): REASONABLE FOR DEV/TEST, NOT RECOMMENDED FOR PLAYERS.
 
-- The plugin loads and the scheduler abstraction detects Folia and uses the global/region/entity/async schedulers. The acute crash paths fixed in Phases 2-3 (framework async command execution, warmups/teleports, the claim/unclaim/stuck spiral, flight cooldown, unclaim player cleanup, stuck world access, and the chat-password mutation) behave correctly.
-- But the unsynchronized shared model plus the ~40 subsystems still on raw Bukkit schedulers (scoreboards, dynmap, GUIs, timers, command cooldowns, addons) mean Folia will still throw from raw global scheduler calls and the model can race/corrupt under concurrent region activity. It may appear to work at very low population and then fail under load.
-- Suitable only for throwaway developer test servers continuing this migration.
+- The plugin loads and the scheduler abstraction detects Folia and uses the global/region/entity/async
+  schedulers. Phases 2–10 fixed acute crash paths (commands, warmups/teleports, claims, flight map,
+  GUI timers, economy bridge for all audited mutation paths).
+- Remaining raw scheduler sites (5 in 3 files) are startup preload, bStats metrics, and dynmap refresh —
+  not per-tick player/world mutation loops.
+- Vault Folia safety is still unverified, dynmap uses raw scheduler, and concurrent region load has not
+  been end-to-end tested. Suitable for throwaway developer Folia servers continuing validation; not for
+  player-facing staging yet.
 
 Folia production: UNSAFE. DO NOT USE.
 
-- Command model writes are now fully routed through the RealFactions core, but the bulk of Vault
-  usage still flows through legacy `Econ` (not Folia-thread-safe), ~24 raw Bukkit scheduler call sites
-  remain, and economy-interleaved model paths (bank, claim costs, leave/disband) are not yet end-to-end
-  single-writer. Either can corrupt data or crash under real load.
+- All audited economy mutations now route through `RealFactionsEconomyService`, but Vault/`Econ`
+  internals (`getOfflinePlayer(String)`) and dynmap integration remain unverified on Folia. Five raw
+  Bukkit scheduler call sites remain (startup/metrics/dynmap). Model writes are executor-serialized but
+  not proven under real concurrent region load.
 
 Exact reason `folia-supported: true` remains disabled:
 

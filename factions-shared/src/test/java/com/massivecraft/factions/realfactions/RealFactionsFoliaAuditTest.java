@@ -114,7 +114,12 @@ class RealFactionsFoliaAuditTest {
                 "com/massivecraft/factions/zcore/frame/fupgrades/UpgradesListener.java",
                 "com/massivecraft/factions/zcore/persist/MemoryFPlayer.java",
                 "org/saberdev/corex/addons/AutoRespawn.java",
-                "org/saberdev/corex/addons/GlobalGamemode.java"
+                "org/saberdev/corex/addons/GlobalGamemode.java",
+                // Phase 10
+                "com/massivecraft/factions/util/flight/stuct/AsyncPlayerMap.java",
+                "com/massivecraft/factions/util/timer/TimerManager.java",
+                "com/massivecraft/factions/cmd/audit/FLogManager.java",
+                "com/massivecraft/factions/zcore/persist/json/JSONFPlayers.java"
         );
         for (String clean : mustBeClean) {
             assertTrue(!offenders.containsKey(clean),
@@ -392,5 +397,18 @@ class RealFactionsFoliaAuditTest {
         String memoryFPlayer = read(root.resolve("com/massivecraft/factions/zcore/persist/MemoryFPlayer.java"));
         assertTrue(memoryFPlayer.contains("getRealFactionsServices().economy()"),
                 "MemoryFPlayer claim/leave economy paths must use RealFactionsEconomyService.");
+
+        // MemoryFaction disband/remove must route economy through the bridge (Phase 10).
+        String memoryFaction = read(root.resolve("com/massivecraft/factions/zcore/persist/MemoryFaction.java"));
+        assertTrue(memoryFaction.contains("getRealFactionsServices().economy()"),
+                "MemoryFaction disband/remove economy paths must use RealFactionsEconomyService.");
+        assertTrue(!memoryFaction.contains("Econ.transferMoney("),
+                "MemoryFaction must not call Econ.transferMoney directly.");
+        assertTrue(!memoryFaction.contains("Econ.setBalance("),
+                "MemoryFaction must not call Econ.setBalance directly.");
+
+        assertTrue(total == 0,
+                "Legacy Econ mutation call sites outside the bridge must stay at 0 after Phase 10; found "
+                        + total + " across " + backlog.size() + " files.");
     }
 }

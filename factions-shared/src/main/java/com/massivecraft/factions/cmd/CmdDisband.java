@@ -70,7 +70,8 @@ public class CmdDisband extends FCommand {
         }
 
         if (context.player == null) {
-            faction.disband(null, PlayerDisbandReason.PLUGIN);
+            FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(
+                    () -> faction.disband(null, PlayerDisbandReason.PLUGIN));
             return;
         }
 
@@ -85,7 +86,8 @@ public class CmdDisband extends FCommand {
         }
 
         broadcastDisband(context, faction);
-        faction.disband(context.player, PlayerDisbandReason.COMMAND);
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(
+                () -> faction.disband(context.player, PlayerDisbandReason.COMMAND));
         Cooldown.setCooldown(context.fPlayer.getPlayer(), "disbandCooldown", FactionsPlugin.getInstance().getConfig().getInt("fcooldowns.f-disband"));
     }
 

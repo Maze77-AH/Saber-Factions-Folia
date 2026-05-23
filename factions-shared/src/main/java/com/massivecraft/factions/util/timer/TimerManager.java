@@ -31,7 +31,7 @@ public class TimerManager implements Listener, Runnable {
         this.plugin = plugin;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         this.registerTimer(this.graceTimer = new GraceTimer());
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this, 4, 4);
+        plugin.getFactionScheduler().runGlobalTimer(this, 4L, 4L);
     }
 
     public static String getRemaining(long millis, boolean milliseconds) {

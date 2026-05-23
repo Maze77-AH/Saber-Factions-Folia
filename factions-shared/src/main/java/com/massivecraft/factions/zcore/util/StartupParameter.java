@@ -64,8 +64,6 @@ public class StartupParameter {
             if (Conf.useCheckSystem) {
                 FactionsPlugin.getInstance().getFactionScheduler().runGlobalTimer(CheckTask.getInstance(), 0L, 1200L);
                 FactionsPlugin.getInstance().getFactionScheduler().runGlobalTimer(CheckTask.getInstance()::cleanupTask, 0L, 1260L);
-
-                // FactionsPlugin.getInstance().getServer().getScheduler().runTaskTimerAsynchronously(plugin, WeeWooTask::new, 600L, 600L);
             }
 
             FactionsPlugin.getInstance().fLogManager.loadLogs(plugin);
