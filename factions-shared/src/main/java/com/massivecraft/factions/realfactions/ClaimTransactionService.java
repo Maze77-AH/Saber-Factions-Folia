@@ -31,13 +31,16 @@ import java.util.function.Consumer;
 public final class ClaimTransactionService {
 
     private final FactionOperationExecutor executor;
+    private final RealFactionsValidationDiagnostics diagnostics;
 
-    public ClaimTransactionService(FactionOperationExecutor executor) {
+    public ClaimTransactionService(FactionOperationExecutor executor,
+                                   RealFactionsValidationDiagnostics diagnostics) {
         this.executor = executor;
+        this.diagnostics = diagnostics;
     }
 
     public void claim(FPlayer fplayer, Faction forFaction, FLocation flocation, boolean notifyFailure, Consumer<Boolean> callback) {
-        executor.runClaimWrite(() -> {
+        runClaimOp("claim", () -> {
             boolean result = fplayer.attemptClaim(forFaction, flocation, notifyFailure);
             if (callback != null) {
                 callback.accept(result);
@@ -46,7 +49,7 @@ public final class ClaimTransactionService {
     }
 
     public void unclaim(FPlayer fplayer, Faction forFaction, FLocation flocation, boolean notifyFailure, Consumer<Boolean> callback) {
-        executor.runClaimWrite(() -> {
+        runClaimOp("unclaim", () -> {
             boolean result = fplayer.attemptUnclaim(forFaction, flocation, notifyFailure);
             if (callback != null) {
                 callback.accept(result);
@@ -59,14 +62,14 @@ public final class ClaimTransactionService {
      * result directly so callers such as {@code SpiralTask} can drive their batch loop.
      */
     public boolean claimNow(FPlayer fplayer, Faction forFaction, FLocation flocation, boolean notifyFailure) {
-        return fplayer.attemptClaim(forFaction, flocation, notifyFailure);
+        return runClaimOpNow("claimNow", () -> fplayer.attemptClaim(forFaction, flocation, notifyFailure));
     }
 
     /**
      * Unclaim a single chunk assuming the caller already holds the model thread.
      */
     public boolean unclaimNow(FPlayer fplayer, Faction forFaction, FLocation flocation, boolean notifyFailure) {
-        return fplayer.attemptUnclaim(forFaction, flocation, notifyFailure);
+        return runClaimOpNow("unclaimNow", () -> fplayer.attemptUnclaim(forFaction, flocation, notifyFailure));
     }
 
     /**
@@ -75,7 +78,7 @@ public final class ClaimTransactionService {
      * are running inside a {@link #runTransaction} body.
      */
     public void removeAtNow(FLocation flocation) {
-        Board.getInstance().removeAt(flocation);
+        runClaimOp("removeAtNow", () -> Board.getInstance().removeAt(flocation));
     }
 
     public void unclaimAll(Faction faction, Runnable afterCommit) {
@@ -86,7 +89,7 @@ public final class ClaimTransactionService {
      * Unclaim every chunk owned by {@code factionId} as one serialized board write.
      */
     public void unclaimAll(String factionId, Runnable afterCommit) {
-        executor.runClaimWrite(() -> {
+        runClaimOp("unclaimAll", () -> {
             Board.getInstance().unclaimAll(factionId);
             if (afterCommit != null) {
                 afterCommit.run();
@@ -101,7 +104,7 @@ public final class ClaimTransactionService {
      * and the unclaim cannot be interleaved by another model write.
      */
     public void unclaimAll(String factionId, BooleanSupplier precondition, Runnable afterCommit) {
-        executor.runClaimWrite(() -> {
+        runClaimOp("unclaimAll", () -> {
             if (precondition != null && !precondition.getAsBoolean()) {
                 return;
             }
@@ -116,7 +119,7 @@ public final class ClaimTransactionService {
      * Unclaim every chunk owned by {@code factionId} within {@code world} as one serialized board write.
      */
     public void unclaimAllInWorld(String factionId, World world, Runnable afterCommit) {
-        executor.runClaimWrite(() -> {
+        runClaimOp("unclaimAllInWorld", () -> {
             Board.getInstance().unclaimAllInWorld(factionId, world);
             if (afterCommit != null) {
                 afterCommit.run();
@@ -130,10 +133,34 @@ public final class ClaimTransactionService {
      * messaging, logging) inside a single controlled write.
      */
     public void runTransaction(Runnable body) {
-        executor.runClaimWrite(body);
+        runClaimOp("transaction", body);
     }
 
     public FactionOperationExecutor executor() {
         return executor;
+    }
+
+    private void runClaimOp(String op, Runnable body) {
+        executor.runClaimWrite(() -> {
+            long start = diagnostics != null && diagnostics.isEnabled() ? System.nanoTime() : 0L;
+            try {
+                body.run();
+            } finally {
+                if (diagnostics != null && diagnostics.isEnabled()) {
+                    diagnostics.recordClaimOp(op, System.nanoTime() - start);
+                }
+            }
+        });
+    }
+
+    private boolean runClaimOpNow(String op, BooleanSupplier body) {
+        long start = diagnostics != null && diagnostics.isEnabled() ? System.nanoTime() : 0L;
+        try {
+            return body.getAsBoolean();
+        } finally {
+            if (diagnostics != null && diagnostics.isEnabled()) {
+                diagnostics.recordClaimOp(op, System.nanoTime() - start);
+            }
+        }
     }
 }

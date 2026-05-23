@@ -27,16 +27,18 @@ public final class RealFactionsServices {
     private final ChatDisplayCache chatCache;
     private final RealFactionsEconomyService economy;
     private final FactionCreationService factionCreation;
+    private final RealFactionsValidationDiagnostics diagnostics;
 
     public RealFactionsServices(FactionScheduler scheduler, FileConfiguration config) {
         boolean folia = FactionSchedulers.isFolia();
         this.scheduler = scheduler;
         this.flags = RealFactionsFlags.from(config, folia);
-        this.executor = new FactionOperationExecutor(scheduler, folia);
-        this.claims = new ClaimTransactionService(executor);
-        this.persistence = new PersistenceSnapshotService(executor, scheduler);
+        this.diagnostics = new RealFactionsValidationDiagnostics(flags);
+        this.executor = new FactionOperationExecutor(scheduler, folia, diagnostics);
+        this.claims = new ClaimTransactionService(executor, diagnostics);
+        this.persistence = new PersistenceSnapshotService(executor, scheduler, diagnostics);
         this.chatCache = new ChatDisplayCache();
-        this.economy = new RealFactionsEconomyService(executor, flags);
+        this.economy = new RealFactionsEconomyService(executor, flags, diagnostics);
         this.factionCreation = new FactionCreationService(executor, economy);
     }
 
@@ -66,6 +68,10 @@ public final class RealFactionsServices {
 
     public FactionCreationService factionCreation() {
         return factionCreation;
+    }
+
+    public RealFactionsValidationDiagnostics diagnostics() {
+        return diagnostics;
     }
 
     /**
@@ -99,5 +105,9 @@ public final class RealFactionsServices {
         // Refresh the chat display cache on the model thread (every 2s) so AsyncPlayerChatEvent
         // can read immutable snapshots instead of traversing the live model off-thread.
         scheduler.runGlobalTimer(() -> executor.runMarked(chatCache::refreshOnline), 40L, 40L);
+        if (flags.validationDiagnostics()) {
+            Logger.print("[RealFactions] validation-diagnostics enabled — use /f debug for runtime counters.",
+                    Logger.PrefixType.DEFAULT);
+        }
     }
 }

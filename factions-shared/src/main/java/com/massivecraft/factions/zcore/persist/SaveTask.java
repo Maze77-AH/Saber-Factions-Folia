@@ -18,11 +18,22 @@ public class SaveTask implements Runnable {
     }
 
     public void run() {
-        if (!p.getAutoSave() || running) return;
+        RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
+        if (!p.getAutoSave()) {
+            if (services != null) {
+                services.diagnostics().recordAutoSaveSkipped("disabled");
+            }
+            return;
+        }
+        if (running) {
+            if (services != null) {
+                services.diagnostics().recordAutoSaveSkipped("overlap");
+            }
+            return;
+        }
         running = true;
         p.preAutoSave();
 
-        RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
         if (services != null) {
             // Folia-safe autosave: serialize immutable snapshots on the model thread, write the
             // snapshot strings on the async scheduler, and release the guard once writing finishes.

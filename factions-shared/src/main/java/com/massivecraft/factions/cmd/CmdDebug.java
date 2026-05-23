@@ -1,6 +1,7 @@
 package com.massivecraft.factions.cmd;
 
 import com.massivecraft.factions.FactionsPlugin;
+import com.massivecraft.factions.realfactions.RealFactionsServices;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.util.Logger;
 import com.massivecraft.factions.zcore.util.TL;
@@ -37,6 +38,19 @@ public class CmdDebug extends FCommand {
         Logger.print("Inspect Command: " + FCmdRoot.instance.coreProtectEnabled, Logger.PrefixType.DEBUG);
         Logger.print("Internal FTOP Command: " + FCmdRoot.instance.internalFTOPEnabled, Logger.PrefixType.DEBUG);
         Logger.print("----End Command----", Logger.PrefixType.DEBUG);
+        RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
+        if (services != null) {
+            Logger.print("-----RealFactions Validation-----", Logger.PrefixType.DEBUG);
+            if (services.flags().validationDiagnostics()) {
+                for (String line : services.diagnostics().formatSummaryLines(services.economy())) {
+                    Logger.print(line, Logger.PrefixType.DEBUG);
+                }
+            } else {
+                Logger.print("Set realfactions.validation-diagnostics: true in config.yml for runtime counters.",
+                        Logger.PrefixType.DEBUG);
+            }
+            Logger.print("---End RealFactions Validation---", Logger.PrefixType.DEBUG);
+        }
         Logger.print("-----End Main-----", Logger.PrefixType.DEBUG);
         Logger.print("End Attempt Log", Logger.PrefixType.DEBUG);
         Logger.print("--------End Debug Info--------", Logger.PrefixType.DEBUG);

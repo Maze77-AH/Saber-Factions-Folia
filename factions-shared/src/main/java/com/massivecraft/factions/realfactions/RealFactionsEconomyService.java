@@ -37,15 +37,18 @@ public final class RealFactionsEconomyService {
     private final FactionOperationExecutor executor;
     private final boolean folia;
     private final boolean foliaStrictMode;
+    private final RealFactionsValidationDiagnostics diagnostics;
 
     private String providerName = "none";
     private boolean providerKnownSafe = false;
     private boolean disabledByStrictMode = false;
 
-    public RealFactionsEconomyService(FactionOperationExecutor executor, RealFactionsFlags flags) {
+    public RealFactionsEconomyService(FactionOperationExecutor executor, RealFactionsFlags flags,
+                                      RealFactionsValidationDiagnostics diagnostics) {
         this.executor = executor;
         this.folia = flags.isFolia();
         this.foliaStrictMode = flags.foliaStrictMode();
+        this.diagnostics = diagnostics;
     }
 
     /**
@@ -105,8 +108,10 @@ public final class RealFactionsEconomyService {
      */
     public void runEconomy(Runnable vaultWork) {
         if (!isEconomyEnabled()) {
+            recordEconomyStrictModeSkip();
             return;
         }
+        recordEconomyInvocation();
         executor.runWrite(vaultWork);
     }
 
@@ -116,8 +121,10 @@ public final class RealFactionsEconomyService {
      */
     public <T> T runEconomy(Supplier<T> vaultWork, T disabledResult) {
         if (!isEconomyEnabled()) {
+            recordEconomyStrictModeSkip();
             return disabledResult;
         }
+        recordEconomyInvocation();
         if (executor.isOnModelThread()) {
             return vaultWork.get();
         }
@@ -190,6 +197,7 @@ public final class RealFactionsEconomyService {
         try {
             return Econ.setBalance(faction.getAccountId(), Conf.econFactionStartingBalance);
         } catch (Throwable t) {
+            recordEconomyVaultError();
             Logger.print("[RealFactions] Failed to set starting balance for faction "
                     + faction.getTag() + ": " + t.getMessage(), Logger.PrefixType.WARNING);
             return false;
@@ -239,5 +247,23 @@ public final class RealFactionsEconomyService {
             return;
         }
         runEconomy(() -> Econ.modifyMoney(player, amount, null, forDoingThis));
+    }
+
+    private void recordEconomyInvocation() {
+        if (diagnostics != null) {
+            diagnostics.recordEconomyInvocation();
+        }
+    }
+
+    private void recordEconomyStrictModeSkip() {
+        if (diagnostics != null && disabledByStrictMode) {
+            diagnostics.recordEconomyStrictModeSkip();
+        }
+    }
+
+    private void recordEconomyVaultError() {
+        if (diagnostics != null) {
+            diagnostics.recordEconomyVaultError();
+        }
     }
 }

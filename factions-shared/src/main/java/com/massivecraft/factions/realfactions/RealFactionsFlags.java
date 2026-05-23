@@ -11,6 +11,8 @@ import org.bukkit.configuration.file.FileConfiguration;
  *   <li>{@code foliaStrictMode} - refuse to run integrations and code paths that are not yet
  *       proven Folia-safe; disable them automatically rather than risk corruption (defaults on
  *       when running Folia).</li>
+ *   <li>{@code validationDiagnostics} - collect lightweight runtime counters for Folia staging
+ *       validation (defaults off; enable only on test servers).</li>
  * </ul>
  *
  * <p>The defaults intentionally keep Paper/Purpur behaviour unchanged while making Folia fail
@@ -22,17 +24,21 @@ public final class RealFactionsFlags {
     private final boolean folia;
     private final boolean legacyCompatibilityMode;
     private final boolean foliaStrictMode;
+    private final boolean validationDiagnostics;
 
-    private RealFactionsFlags(boolean folia, boolean legacyCompatibilityMode, boolean foliaStrictMode) {
+    private RealFactionsFlags(boolean folia, boolean legacyCompatibilityMode, boolean foliaStrictMode,
+                                boolean validationDiagnostics) {
         this.folia = folia;
         this.legacyCompatibilityMode = legacyCompatibilityMode;
         this.foliaStrictMode = foliaStrictMode;
+        this.validationDiagnostics = validationDiagnostics;
     }
 
     public static RealFactionsFlags from(FileConfiguration config, boolean folia) {
         boolean legacy = config.getBoolean("realfactions.legacy-compatibility-mode", !folia);
         boolean strict = config.getBoolean("realfactions.folia-strict-mode", folia);
-        return new RealFactionsFlags(folia, legacy, strict);
+        boolean diagnostics = config.getBoolean("realfactions.validation-diagnostics", false);
+        return new RealFactionsFlags(folia, legacy, strict, diagnostics);
     }
 
     public boolean isFolia() {
@@ -53,5 +59,12 @@ public final class RealFactionsFlags {
      */
     public boolean disableUnsafeIntegrations() {
         return foliaStrictMode;
+    }
+
+    /**
+     * @return true when lightweight runtime validation counters should be collected (staging/test only).
+     */
+    public boolean validationDiagnostics() {
+        return validationDiagnostics;
     }
 }

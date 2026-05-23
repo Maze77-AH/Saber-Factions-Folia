@@ -35,11 +35,14 @@ public final class FactionOperationExecutor {
 
     private final FactionScheduler scheduler;
     private final boolean folia;
+    private final RealFactionsValidationDiagnostics diagnostics;
     private final ThreadLocal<Boolean> onModelThread = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
-    public FactionOperationExecutor(FactionScheduler scheduler, boolean folia) {
+    public FactionOperationExecutor(FactionScheduler scheduler, boolean folia,
+                                      RealFactionsValidationDiagnostics diagnostics) {
         this.scheduler = scheduler;
         this.folia = folia;
+        this.diagnostics = diagnostics;
     }
 
     /**
@@ -62,7 +65,27 @@ public final class FactionOperationExecutor {
      */
     public void runWrite(Runnable task) {
         if (isOnModelThread()) {
-            task.run();
+            if (diagnostics != null && diagnostics.isEnabled()) {
+                long start = System.nanoTime();
+                try {
+                    task.run();
+                } finally {
+                    diagnostics.recordWrite(true, System.nanoTime() - start);
+                }
+            } else {
+                task.run();
+            }
+        } else if (diagnostics != null && diagnostics.isEnabled()) {
+            diagnostics.recordPendingModelWrite(1);
+            scheduler.runGlobal(() -> runMarked(() -> {
+                long start = System.nanoTime();
+                try {
+                    task.run();
+                } finally {
+                    diagnostics.recordWrite(false, System.nanoTime() - start);
+                    diagnostics.recordPendingModelWrite(-1);
+                }
+            }));
         } else {
             scheduler.runGlobal(() -> runMarked(task));
         }
@@ -79,6 +102,7 @@ public final class FactionOperationExecutor {
         }
         java.util.concurrent.atomic.AtomicReference<T> result = new AtomicReference<>();
         CountDownLatch latch = new CountDownLatch(1);
+        long waitStart = diagnostics != null && diagnostics.isEnabled() ? System.nanoTime() : 0L;
         scheduler.runGlobal(() -> runMarked(() -> {
             try {
                 result.set(task.get());
@@ -91,6 +115,9 @@ public final class FactionOperationExecutor {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted waiting for model-thread economy work", e);
+        }
+        if (diagnostics != null && diagnostics.isEnabled()) {
+            diagnostics.recordBlockedWait(System.nanoTime() - waitStart);
         }
         return result.get();
     }

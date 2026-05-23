@@ -24,10 +24,13 @@ public final class PersistenceSnapshotService {
 
     private final FactionOperationExecutor executor;
     private final FactionScheduler scheduler;
+    private final RealFactionsValidationDiagnostics diagnostics;
 
-    public PersistenceSnapshotService(FactionOperationExecutor executor, FactionScheduler scheduler) {
+    public PersistenceSnapshotService(FactionOperationExecutor executor, FactionScheduler scheduler,
+                                      RealFactionsValidationDiagnostics diagnostics) {
         this.executor = executor;
         this.scheduler = scheduler;
+        this.diagnostics = diagnostics;
     }
 
     public void saveAllAsync() {
@@ -41,15 +44,24 @@ public final class PersistenceSnapshotService {
      */
     public void saveAllAsync(Runnable onComplete) {
         executor.runWrite(() -> {
+            long serializeStart = diagnostics != null && diagnostics.isEnabled() ? System.nanoTime() : 0L;
             final String factionsJson = Factions.getInstance().serializeToJson();
             final String playersJson = FPlayers.getInstance().serializeToJson();
             final String boardJson = Board.getInstance().serializeToJson();
+            if (diagnostics != null && diagnostics.isEnabled()) {
+                diagnostics.recordSaveSerialize(System.nanoTime() - serializeStart);
+            }
             scheduler.runAsync(() -> {
+                long writeStart = diagnostics != null && diagnostics.isEnabled() ? System.nanoTime() : 0L;
                 try {
                     Factions.getInstance().writeJson(factionsJson, true);
                     FPlayers.getInstance().writeJson(playersJson, true);
                     Board.getInstance().writeJson(boardJson, true);
                 } finally {
+                    if (diagnostics != null && diagnostics.isEnabled()) {
+                        diagnostics.recordSaveWrite(System.nanoTime() - writeStart);
+                        diagnostics.recordSaveAsyncCompleted();
+                    }
                     if (onComplete != null) {
                         onComplete.run();
                     }

@@ -411,4 +411,17 @@ class RealFactionsFoliaAuditTest {
                 "Legacy Econ mutation call sites outside the bridge must stay at 0 after Phase 10; found "
                         + total + " across " + backlog.size() + " files.");
     }
+
+    @Test
+    void validationDiagnosticsFoundationExists() {
+        Path root = sourceRoot();
+        assertTrue(Files.exists(root.resolve("com/massivecraft/factions/realfactions/RealFactionsValidationDiagnostics.java")),
+                "RealFactionsValidationDiagnostics must exist for Phase 11 staging validation.");
+        String flags = read(root.resolve("com/massivecraft/factions/realfactions/RealFactionsFlags.java"));
+        assertTrue(flags.contains("validation-diagnostics"),
+                "RealFactionsFlags must expose realfactions.validation-diagnostics config key.");
+        String services = read(root.resolve("com/massivecraft/factions/realfactions/RealFactionsServices.java"));
+        assertTrue(services.contains("diagnostics()"),
+                "RealFactionsServices must expose validation diagnostics.");
+    }
 }

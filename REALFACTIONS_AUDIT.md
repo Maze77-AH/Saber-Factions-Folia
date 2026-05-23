@@ -846,6 +846,147 @@ Current audit-scanner counts after Phase 10:
   internals (`getOfflinePlayer(String)`), dynmap raw scheduler, no production load verification, model
   is serialized through executor but not fully proven under concurrent region load.
 
+## Phase 11: Folia Staging Validation Plan (validation-first)
+
+Phase 11 is **not** a migration sprint. It adds a controlled Folia staging checklist with explicit
+pass/fail criteria and lightweight runtime diagnostics so validation is measurable. `folia-supported`
+remains disabled.
+
+### Config flag
+
+Add to `config.yml` on **staging/test servers only**:
+
+```yaml
+realfactions:
+  validation-diagnostics: true
+```
+
+When enabled:
+
+- Counters are collected for executor writes, claim transactions, async saves, and economy bridge
+  activity.
+- Startup logs: `[RealFactions] validation-diagnostics enabled — use /f debug for runtime counters.`
+- Operators with `factions.debug` permission can dump a snapshot with `/f debug`.
+
+Default is `false` — no overhead on Paper/Purpur production servers.
+
+### Runtime diagnostics added
+
+| Area | What is measured | How to read it |
+|------|------------------|----------------|
+| **Executor** | Approx pending queue depth, inline vs scheduled writes, write latency avg/max, blocked cross-thread wait count/avg/max | Rising `pendingModelWrites` under load suggests executor backlog; blocked waits &gt; 50 ms avg warrant investigation |
+| **Claims** | Per-op counts (`claim`, `unclaim`, `unclaimAll`, …), total/avg/max transaction time | Spikes on `unclaimAll` during disband are expected; sustained high max on single-chunk ops may indicate contention |
+| **Persistence** | Serialize vs disk-write timing, async save count, autosave skip reasons | Serialize max &gt; 500 ms or write max &gt; 2000 ms under normal load is a warning sign |
+| **Economy bridge** | Vault invocations, strict-mode skips, vault errors | Strict-mode skips on Folia with non-allowlisted provider are expected; vault errors should stay at 0 |
+| **Static audit** | Reminder to run `mvn test` before staging | Confirms command/board/createFaction/listener/econ backlog 0 and raw scheduler 5/3 files |
+
+Implementation: `RealFactionsValidationDiagnostics` wired through `FactionOperationExecutor`,
+`ClaimTransactionService`, `PersistenceSnapshotService`, `RealFactionsEconomyService`, and `SaveTask`.
+
+### Pre-staging gate (must pass before Folia boot test)
+
+Run on the build machine:
+
+```bash
+mvn -q test
+mvn -q clean package
+```
+
+**Pass criteria (from `RealFactionsFoliaAuditTest` output):**
+
+| Metric | Required |
+|--------|----------|
+| Command model-write backlog | **0** |
+| Direct board writes outside service | **0** |
+| Direct `createFaction` outside service | **0** |
+| Listener mutation backlog | **0** |
+| Legacy Econ outside bridge | **0** |
+| Raw Bukkit scheduler | **5 / 3 files** (`FactionsPlugin`×2, `EngineDynmap`×2, `Metrics`×1) |
+
+Any regression fails the gate — do not proceed to Folia staging until fixed.
+
+### Folia staging server setup
+
+1. Folia server (throwaway), RealFactions jar from `mvn clean package`.
+2. `config.yml`: set `realfactions.validation-diagnostics: true`.
+3. Vault + economy provider installed (note provider name in logs).
+4. Optional: dynmap installed if testing integration (expect raw scheduler — document any thread errors).
+5. **Do not** set `folia-supported: true` in `plugin.yml`.
+
+### Staging test checklist
+
+Each test: perform action → verify expected behavior → run `/f debug` → note diagnostic counters →
+restart server if persistence test requires it.
+
+| # | Test | Steps | Pass | Fail |
+|---|------|-------|------|------|
+| 1 | **Boot** | Start Folia server with RealFactions + Vault | Plugin enables; no thread assertion in first 60 s; log shows scheduler mode + economy provider | Crash, `IllegalStateException` thread violation, plugin disable |
+| 2 | **`/f create`** | 2+ players create factions in different regions | Factions created; power/claims OK; executor writes increment; no blocked-wait spike | Missing faction after restart, CME in log, create cost charged but faction missing |
+| 3 | **`/f claim`** | Players claim in different regions simultaneously (10+ claims each) | Claims succeed; board correct; claim op counts rise; pending queue returns to ~0 after burst | Wrong owner, duplicate claims, thread errors, queue stuck &gt; 5 for 30+ s |
+| 4 | **`/f unclaim`** | Unclaim several chunks per player | Chunks freed; economy refund if configured | Orphan claims, refund missing when economy enabled |
+| 5 | **`/f unclaimall`** | One faction unclaims all | All chunks removed; refund if configured; `unclaimAll` op recorded | Partial unclaim, board corruption after restart |
+| 6 | **`/f disband`** | Disband faction with bank balance | Faction removed; bank payout or strict-mode skip logged; holdings message if applicable | Faction ghost data, balance duped, disband hangs |
+| 7 | **`/f join` / leave / kick** | Cross-faction membership changes | Roles correct; no duplicate membership | Player in two factions, kick/leave no-op |
+| 8 | **Promote / demote** | Leader promotes mod, demotes | Roles persist after restart | Role reverts or wrong permissions |
+| 9 | **`/f sethome` + `/f home`** | Set home in claimed land, teleport from another region | Teleport succeeds; warmup completes on entity scheduler | Teleport to wrong location, thread error during warmup |
+| 10 | **Warps / checkpoints** | Set warp, `/f warp`; set checkpoint, use checkpoint | Teleports work; costs deducted if configured | Warp password/GUI thread error, cost charged without warp |
+| 11 | **Flight** | `/f fly` in claimed territory, move across regions | Flight toggles; titles update; no global scheduler crash | Flight stuck, title spam errors, AsyncPlayerMap thread violation |
+| 12 | **Bank / economy** | Deposit, withdraw, transfer; claim cost; create cost | Balances correct when provider allowlisted; strict-mode skips logged on Folia if not allowlisted | Vault called from wrong thread, balance desync, silent cost skip without log |
+| 13 | **Multi-region concurrency** | 4+ players in 4+ distant regions: claim, chat, home, bank within 2 min | No deadlocks; server TPS stable; diagnostics queue depth stable | Server freeze, watchdog timeout, monotonic queue growth |
+| 14 | **Autosave + restart** | Wait for autosave interval; `/stop`; restart | Factions/claims/players restored identically | Missing claims, duplicated factions, JSON parse errors |
+| 15 | **Soak (optional, 4–24 h)** | Low population play with diagnostics on | Counters stable; no memory leak; no rising blocked waits | Progressive lag, queue depth creep, OOM |
+
+### Failure signals to watch for
+
+| Signal | Likely cause | Action |
+|--------|--------------|--------|
+| Folia `IllegalStateException` / "Async thread" / region thread assertion | Raw scheduler or Bukkit API off wrong thread | Capture stack trace; map to file; fix or defer integration |
+| Deadlock / server hang | Executor blocked wait + model thread waiting on region thread | Thread dump; check `runWriteForResult` + command paths |
+| `pendingModelWrites` monotonic increase | Executor backlog / slow model writes | Profile claim/disband/save duration; reduce concurrent bulk ops |
+| Serialize avg &gt; 500 ms or write avg &gt; 2000 ms | Large faction data or disk I/O | Check faction count; verify async write path |
+| `economy vault errors` &gt; 0 | Provider not thread-safe or misconfigured | Test provider on Paper first; document in provider matrix |
+| `strict-mode skips` unexpected on Paper | Misconfigured `folia-strict-mode` | Verify config defaults |
+| Data mismatch after restart | Shutdown save path (`MPlugin.onDisable` legacy `forceSave`) vs async autosave race | Compare JSON files before/after; note in Phase 12 if reproducible |
+| Dynmap marker drift or thread errors | `EngineDynmap` raw scheduler (deferred) | Disable dynmap on Folia staging or accept as known integration risk |
+
+### Concurrency / load validation focus
+
+- **Executor behavior under stress:** During test #13, sample `/f debug` every 30 s; `pendingModelWrites`
+  should return to 0–2 after each burst; blocked wait max should stay under 100 ms for routine ops.
+- **Claim transaction timing:** `claim`/`unclaim` max under 200 ms for single chunk on empty server;
+  `unclaimAll` may be higher — log max and faction size.
+- **Save/snapshot timing:** One autosave cycle during soak; serialize + write should complete without
+  overlap skips climbing every interval (overlap skip = previous save still running).
+
+### Dynmap isolation strategy (deferred, document only)
+
+- **Staging:** Run with dynmap disabled first; repeat subset with dynmap enabled and capture thread errors.
+- **Production Folia:** Treat dynmap as **unsupported** until `EngineDynmap` migrates off raw scheduler.
+- **Future option:** Global timer cadence + region-safe marker updates, or hard-disable dynmap under Folia strict mode.
+
+### Provider compatibility verification
+
+| Provider | Paper smoke test | Folia staging | Known Folia-safe |
+|----------|------------------|---------------|------------------|
+| (install yours) | `/f create` cost, bank deposit | Same + `/f debug` economy section | **None allowlisted yet** |
+
+Under Folia + `foliaStrictMode` (default on Folia): economy costs/refunds skipped when provider not
+allowlisted — verify logs show `[RealFactions] foliaStrictMode` warnings, not silent corruption.
+
+### Audit test extended
+
+`RealFactionsFoliaAuditTest` now includes `validationDiagnosticsFoundationExists` — asserts the
+diagnostics class, config key, and service accessor exist.
+
+### Folia verdict (unchanged — validation pending)
+
+- **Paper/Purpur staging:** SAFE — diagnostics default off; no behavior change.
+- **Folia staging:** REASONABLE for dev/test **with this checklist** — diagnostics make validation
+  measurable; production player traffic still not recommended until soak tests pass.
+- **Folia production:** UNSAFE — `folia-supported` stays disabled until staging checklist passes,
+  provider matrix is documented, dynmap strategy decided, and concurrent soak shows stable executor/save
+  behavior.
+
 ## Build Results
 
 Baseline before edits:
@@ -957,6 +1098,15 @@ After Phase 10:
 - `mvn -q clean package`
 - Result: success (exit code 0).
 
+After Phase 11:
+
+- `mvn -q test`
+- Result: success (exit code 0). 11 tests pass, including `validationDiagnosticsFoundationExists`.
+  Static audit counts unchanged from Phase 10.
+
+- `mvn -q clean package`
+- Result: success (exit code 0).
+
 Target Java 25/Paper 26 profile check:
 
 - `mvn -q -Ppaper26-java25 -DskipTests clean package`
@@ -971,13 +1121,11 @@ Local Java state:
 
 ## Staging And Production Safety Assessment
 
-This assessment reflects the state after Phase 10. Phase 9 routed command costs, bank commands,
-claim/leave/unclaim economy paths, and key GUI costs through `RealFactionsEconomyService`, and migrated
-high-risk GUI/player/region scheduler sites (raw scheduler count 24 → 12). Phase 10 migrated the last
-legacy Econ mutations in `MemoryFaction` and the highest-value remaining unsafe scheduler sites (raw
-scheduler count 12 → 5). After Phase 10: 0 command/board/createFaction/listener/economy mutation backlog,
-5 raw scheduler sites (startup/metrics/dynmap only). Folia staging is now reasonable for dev/test;
-Folia production stays unsafe; `folia-supported` stays off.
+This assessment reflects the state after Phase 11. Phases 8–10 completed migration of command/model
+writes, economy bridge routing, and high-risk schedulers. Phase 11 adds a Folia staging validation
+checklist and optional runtime diagnostics (`realfactions.validation-diagnostics`) — no new migration,
+no `folia-supported`. Folia staging is reasonable **when following the Phase 11 checklist**; Folia
+production remains blocked until soak/concurrency validation passes.
 
 Paper / Purpur staging: SAFE. Recommended target.
 
