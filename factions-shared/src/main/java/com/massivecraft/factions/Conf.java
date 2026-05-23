@@ -1,8 +1,9 @@
 package com.massivecraft.factions;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.google.common.collect.ImmutableMap;
 import com.massivecraft.factions.integration.dynmap.DynmapStyle;
+import com.massivecraft.factions.util.Logger;
+import com.massivecraft.factions.util.VersionProtocol;
 import com.massivecraft.factions.zcore.fperms.DefaultPermissions;
 import com.massivecraft.factions.zcore.fperms.FPerms;
 import org.bukkit.ChatColor;
@@ -423,6 +424,7 @@ public class Conf {
     public static HashSet<String> lockedPermissions = new HashSet<>();
 
     private static transient Conf i = new Conf();
+    private static volatile boolean runtimeDefaultsInitialized = false;
 
     static {
         lockedPermissions.add(FPerms.normalizeId("chest"));
@@ -455,161 +457,137 @@ public class Conf {
         territoryEnemyDenyCommands.add("tpa");
         territoryEnemyDenyCommands.add("etpa");
         territoryEnemyDenyCommands.add("etpask");
+    }
 
-        if (FactionsPlugin.getInstance().version >= 17) {
+    /**
+     * Populate version-sensitive material/entity defaults after the plugin and Bukkit registries are
+     * available. Must not run from {@code Conf} static initialization — shaded XSeries {@code XMaterial}
+     * can fail {@code <clinit>} on newer Minecraft versions (for example 26.x on Folia).
+     */
+    public static void ensureRuntimeDefaults() {
+        if (runtimeDefaultsInitialized) {
+            return;
+        }
+        synchronized (Conf.class) {
+            if (runtimeDefaultsInitialized) {
+                return;
+            }
+            initRuntimeDefaults();
+            runtimeDefaultsInitialized = true;
+        }
+    }
+
+    public static boolean isRuntimeReady() {
+        return runtimeDefaultsInitialized;
+    }
+
+    private static int resolveMajorVersion() {
+        FactionsPlugin plugin = FactionsPlugin.getInstance();
+        if (plugin != null && plugin.version > 0) {
+            return plugin.version;
+        }
+        return VersionProtocol.getMajorCompatibilityVersion();
+    }
+
+    private static void addMaterial(Collection<Material> target, String materialName) {
+        if (materialName == null || materialName.isEmpty()) {
+            return;
+        }
+        try {
+            Material material = Material.matchMaterial(materialName);
+            if (material != null && material != Material.AIR) {
+                target.add(material);
+            }
+        } catch (Throwable t) {
+            Logger.print("[RealFactions] Skipping unknown material default '" + materialName + "': "
+                    + t.getMessage(), Logger.PrefixType.WARNING);
+        }
+    }
+
+    private static void addMaterials(Collection<Material> target, String... materialNames) {
+        for (String materialName : materialNames) {
+            addMaterial(target, materialName);
+        }
+    }
+
+    private static void addEntityType(Collection<EntityType> target, String entityName) {
+        try {
+            target.add(EntityType.valueOf(entityName));
+        } catch (Throwable ignored) {
+            // Unknown on this server version.
+        }
+    }
+
+    private static void initRuntimeDefaults() {
+        int version = resolveMajorVersion();
+
+        if (version >= 17) {
             safeZoneNerfedCreatureTypes.add(EntityType.GLOW_SQUID);
             safeZoneNerfedCreatureTypes.add(EntityType.AXOLOTL);
             safeZoneNerfedCreatureTypes.add(EntityType.ZOMBIFIED_PIGLIN);
-        } else if (FactionsPlugin.getInstance().version == 16) {
+        } else if (version == 16) {
             safeZoneNerfedCreatureTypes.add(EntityType.ZOMBIFIED_PIGLIN);
         } else {
-            safeZoneNerfedCreatureTypes.add(EntityType.valueOf("PIG_ZOMBIE"));
+            addEntityType(safeZoneNerfedCreatureTypes, "PIG_ZOMBIE");
         }
 
-        territoryDenyUsageMaterials.add(XMaterial.FLINT_AND_STEEL.get());
-        if(FactionsPlugin.getInstance().version != 8) {
-            territoryDenyUsageMaterials.add(XMaterial.END_CRYSTAL.get());
+        addMaterial(territoryDenyUsageMaterials, "FLINT_AND_STEEL");
+        if (version != 8) {
+            addMaterial(territoryDenyUsageMaterials, "END_CRYSTAL");
         }
-        territoryDenyUsageMaterials.add(XMaterial.BUCKET.get());
-        territoryDenyUsageMaterials.add(XMaterial.WATER_BUCKET.get());
-        territoryDenyUsageMaterials.add(XMaterial.LAVA_BUCKET.get());
+        addMaterials(territoryDenyUsageMaterials, "BUCKET", "WATER_BUCKET", "LAVA_BUCKET");
 
-        if(FactionsPlugin.getInstance().version == 8) {
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("BOAT").get().get());
+        if (version == 8) {
+            addMaterial(territoryDenyUsageMaterials, "BOAT");
         }
-
-        if(FactionsPlugin.getInstance().version >= 9) {
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("ACACIA_BOAT").get().get());
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("BIRCH_BOAT").get().get());
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("DARK_OAK_BOAT").get().get());
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("JUNGLE_BOAT").get().get());
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("OAK_BOAT").get().get());
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("SPRUCE_BOAT").get().get());
+        if (version >= 9) {
+            addMaterials(territoryDenyUsageMaterials,
+                    "ACACIA_BOAT", "BIRCH_BOAT", "DARK_OAK_BOAT", "JUNGLE_BOAT", "OAK_BOAT", "SPRUCE_BOAT");
         }
-
-        if(FactionsPlugin.getInstance().version >= 19) {
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("MANGROVE_BOAT").get().get());
+        if (version >= 19) {
+            addMaterial(territoryDenyUsageMaterials, "MANGROVE_BOAT");
         }
-
-        if(FactionsPlugin.getInstance().version >= 20) {
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("BAMBOO_RAFT").get().get());
-            territoryDenyUsageMaterials.add(XMaterial.matchXMaterial("CHERRY_BOAT").get().get());
+        if (version >= 20) {
+            addMaterials(territoryDenyUsageMaterials, "BAMBOO_RAFT", "CHERRY_BOAT");
         }
-
-        if (FactionsPlugin.getInstance().version != 7) {
-            territoryDenyUsageMaterials.add(XMaterial.ARMOR_STAND.get());
+        if (version != 7) {
+            addMaterial(territoryDenyUsageMaterials, "ARMOR_STAND");
+        }
+        if (version >= 13) {
+            addMaterials(territoryDenyUsageMaterials,
+                    "COD_BUCKET", "PUFFERFISH_BUCKET", "SALMON_BUCKET", "TROPICAL_FISH_BUCKET");
+        }
+        if (version >= 17) {
+            addMaterials(territoryDenyUsageMaterials, "AXOLOTL_BUCKET", "POWDER_SNOW_BUCKET");
         }
 
-        if (FactionsPlugin.getInstance().version >= 13) {
-            territoryDenyUsageMaterials.add(XMaterial.COD_BUCKET.get());
-            territoryDenyUsageMaterials.add(XMaterial.PUFFERFISH_BUCKET.get());
-            territoryDenyUsageMaterials.add(XMaterial.SALMON_BUCKET.get());
-            territoryDenyUsageMaterials.add(XMaterial.TROPICAL_FISH_BUCKET.get());
-        }
+        addMaterials(territoryDenySwitchMaterials,
+                "ACACIA_FENCE_GATE", "BIRCH_FENCE_GATE", "DARK_OAK_FENCE_GATE", "JUNGLE_FENCE_GATE",
+                "OAK_FENCE_GATE", "SPRUCE_FENCE_GATE",
+                "ACACIA_DOOR", "BIRCH_DOOR", "DARK_OAK_DOOR", "JUNGLE_DOOR", "OAK_DOOR", "SPRUCE_DOOR",
+                "DISPENSER", "CHEST", "TRAPPED_CHEST",
+                "ACACIA_BUTTON", "BIRCH_BUTTON", "DARK_OAK_BUTTON", "JUNGLE_BUTTON", "OAK_BUTTON", "SPRUCE_BUTTON",
+                "DROPPER", "HOPPER", "ITEM_FRAME",
+                "ACACIA_TRAPDOOR", "BIRCH_TRAPDOOR", "DARK_OAK_TRAPDOOR", "JUNGLE_TRAPDOOR", "OAK_TRAPDOOR",
+                "SPRUCE_TRAPDOOR", "LEVER", "COMPARATOR", "REPEATER",
+                "PURPLE_SHULKER_BOX", "WHITE_SHULKER_BOX", "MAGENTA_SHULKER_BOX", "LIGHT_BLUE_SHULKER_BOX",
+                "CYAN_SHULKER_BOX", "BLUE_SHULKER_BOX", "BROWN_SHULKER_BOX", "ORANGE_SHULKER_BOX",
+                "GREEN_SHULKER_BOX", "RED_SHULKER_BOX", "BLACK_SHULKER_BOX", "GRAY_SHULKER_BOX",
+                "LIME_SHULKER_BOX", "LIGHT_GRAY_SHULKER_BOX", "PINK_SHULKER_BOX", "YELLOW_SHULKER_BOX",
+                "SHULKER_BOX", "BARREL");
 
-        if (FactionsPlugin.getInstance().version >= 17) {
-            territoryDenyUsageMaterials.add(XMaterial.AXOLOTL_BUCKET.get());
-            territoryDenyUsageMaterials.add(XMaterial.POWDER_SNOW_BUCKET.get());
-        }
+        addMaterials(territoryCancelAndAllowItemUseMaterial,
+                "GOLDEN_APPLE", "APPLE", "ENCHANTED_GOLDEN_APPLE",
+                "COOKED_BEEF", "COOKED_MUTTON", "COOKED_CHICKEN", "COOKED_COD", "COOKED_PORKCHOP",
+                "COOKED_RABBIT", "COOKED_SALMON", "ENDER_PEARL", "POTION", "SPLASH_POTION",
+                "CREEPER_SPAWN_EGG", "BOW",
+                "DIAMOND_HELMET", "DIAMOND_CHESTPLATE", "DIAMOND_LEGGINGS", "DIAMOND_BOOTS",
+                "IRON_HELMET", "IRON_CHESTPLATE", "IRON_LEGGINGS", "IRON_BOOTS",
+                "LEATHER_HELMET", "LEATHER_CHESTPLATE", "LEATHER_LEGGINGS", "LEATHER_BOOTS",
+                "CHAINMAIL_HELMET", "CHAINMAIL_CHESTPLATE", "CHAINMAIL_LEGGINGS", "CHAINMAIL_BOOTS");
 
-        territoryDenySwitchMaterials.add(XMaterial.ACACIA_FENCE_GATE.get());
-        territoryDenySwitchMaterials.add(XMaterial.BIRCH_FENCE_GATE.get());
-        territoryDenySwitchMaterials.add(XMaterial.DARK_OAK_FENCE_GATE.get());
-        territoryDenySwitchMaterials.add(XMaterial.JUNGLE_FENCE_GATE.get());
-        territoryDenySwitchMaterials.add(XMaterial.OAK_FENCE_GATE.get());
-        territoryDenySwitchMaterials.add(XMaterial.SPRUCE_FENCE_GATE.get());
-        territoryDenySwitchMaterials.add(XMaterial.ACACIA_DOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.BIRCH_DOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.DARK_OAK_DOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.JUNGLE_DOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.OAK_DOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.SPRUCE_DOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.DISPENSER.get());
-        territoryDenySwitchMaterials.add(XMaterial.CHEST.get());
-        territoryDenySwitchMaterials.add(XMaterial.TRAPPED_CHEST.get());
-        territoryDenySwitchMaterials.add(XMaterial.ACACIA_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.BIRCH_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.DARK_OAK_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.JUNGLE_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.OAK_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.SPRUCE_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.DROPPER.get());
-        territoryDenySwitchMaterials.add(XMaterial.HOPPER.get());
-        territoryDenySwitchMaterials.add(XMaterial.ITEM_FRAME.get());
-        territoryDenySwitchMaterials.add(XMaterial.ACACIA_TRAPDOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.BIRCH_TRAPDOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.DARK_OAK_TRAPDOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.JUNGLE_TRAPDOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.OAK_TRAPDOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.SPRUCE_TRAPDOOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.LEVER.get());
-        territoryDenySwitchMaterials.add(XMaterial.COMPARATOR.get());
-        territoryDenySwitchMaterials.add(XMaterial.REPEATER.get());
-        territoryDenySwitchMaterials.add(XMaterial.ACACIA_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.BIRCH_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.DARK_OAK_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.JUNGLE_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.OAK_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.SPRUCE_BUTTON.get());
-        territoryDenySwitchMaterials.add(XMaterial.PURPLE_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.WHITE_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.MAGENTA_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.LIGHT_BLUE_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.CYAN_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.BLUE_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.BROWN_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.ORANGE_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.GREEN_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.RED_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.BLACK_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.GRAY_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.LIME_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.LIGHT_GRAY_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.PINK_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.YELLOW_SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.SHULKER_BOX.get());
-        territoryDenySwitchMaterials.add(XMaterial.BARREL.get());
-
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.GOLDEN_APPLE.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.APPLE.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.ENCHANTED_GOLDEN_APPLE.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.COOKED_BEEF.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.COOKED_MUTTON.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.COOKED_CHICKEN.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.COOKED_COD.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.COOKED_PORKCHOP.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.COOKED_RABBIT.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.COOKED_SALMON.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.ENDER_PEARL.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.POTION.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.SPLASH_POTION.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.CREEPER_SPAWN_EGG.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.BOW.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.DIAMOND_HELMET.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.DIAMOND_CHESTPLATE.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.DIAMOND_LEGGINGS.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.DIAMOND_BOOTS.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.IRON_HELMET.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.IRON_CHESTPLATE.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.IRON_LEGGINGS.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.IRON_BOOTS.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.LEATHER_HELMET.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.LEATHER_CHESTPLATE.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.LEATHER_LEGGINGS.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.LEATHER_BOOTS.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.CHAINMAIL_HELMET.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.CHAINMAIL_CHESTPLATE.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.CHAINMAIL_LEGGINGS.get());
-        territoryCancelAndAllowItemUseMaterial.add(XMaterial.CHAINMAIL_BOOTS.get());
-
-        /// TODO: Consider removing this in a future release, as permissions works just fine now
-        territoryProtectedMaterials.add(Material.BEACON);
-
-        // Config is not loading if value is empty ???
-        territoryBypassProtectedMaterials.add(XMaterial.COOKIE.get());
-        territoryBypassProtectedMaterials.add(XMaterial.CHEST.get());
-        territoryBypassProtectedMaterials.add(XMaterial.TRAPPED_CHEST.get());
-
+        addMaterial(territoryProtectedMaterials, "BEACON");
+        addMaterials(territoryBypassProtectedMaterials, "COOKIE", "CHEST", "TRAPPED_CHEST");
 
         safeZoneNerfedCreatureTypes.add(EntityType.BLAZE);
         safeZoneNerfedCreatureTypes.add(EntityType.CAVE_SPIDER);
@@ -618,7 +596,6 @@ public class Conf {
         safeZoneNerfedCreatureTypes.add(EntityType.ENDERMAN);
         safeZoneNerfedCreatureTypes.add(EntityType.GHAST);
         safeZoneNerfedCreatureTypes.add(EntityType.MAGMA_CUBE);
-
         safeZoneNerfedCreatureTypes.add(EntityType.SILVERFISH);
         safeZoneNerfedCreatureTypes.add(EntityType.SKELETON);
         safeZoneNerfedCreatureTypes.add(EntityType.SPIDER);
@@ -627,7 +604,6 @@ public class Conf {
         safeZoneNerfedCreatureTypes.add(EntityType.WITHER);
         safeZoneNerfedCreatureTypes.add(EntityType.ZOMBIE);
 
-        // Is this called lazy load?
         defaultFactionPermissions.put("COLEADER", new DefaultPermissions(true));
         defaultFactionPermissions.put("MODERATOR", new DefaultPermissions(true));
         defaultFactionPermissions.put("NORMAL", new DefaultPermissions(false));
@@ -639,14 +615,17 @@ public class Conf {
     }
 
     public static void load() {
+        ensureRuntimeDefaults();
         FactionsPlugin.getInstance().persist.loadOrSaveDefault(i, Conf.class, "conf");
     }
 
     public static void save() {
+        ensureRuntimeDefaults();
         FactionsPlugin.getInstance().persist.save(i);
     }
 
     public static void saveSync() {
+        ensureRuntimeDefaults();
         FactionsPlugin.instance.persist.saveSync(i);
     }
 

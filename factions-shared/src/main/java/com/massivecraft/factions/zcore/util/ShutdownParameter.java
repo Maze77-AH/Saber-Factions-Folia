@@ -14,15 +14,25 @@ public class ShutdownParameter {
 
     public static void initShutdown(FactionsPlugin plugin) {
         Logger.print( "===== Shutdown Start =====", Logger.PrefixType.DEFAULT);
-        Conf.saveSync();
-        plugin.getTimerManager().saveTimerData();
-        for(FactionsAddon factionsAddon : plugin.getFactionsAddonHashMap().values()) {
-            factionsAddon.terminateAddon();
-            Logger.print("Disabled " + factionsAddon.getAddonName() + " addon", Logger.PrefixType.DEFAULT);
+        if (Conf.isRuntimeReady()) {
+            Conf.saveSync();
+        }
+        if (plugin.getTimerManager() != null) {
+            plugin.getTimerManager().saveTimerData();
+        }
+        if (plugin.getFactionsAddonHashMap() != null) {
+            for (FactionsAddon factionsAddon : plugin.getFactionsAddonHashMap().values()) {
+                factionsAddon.terminateAddon();
+                Logger.print("Disabled " + factionsAddon.getAddonName() + " addon", Logger.PrefixType.DEFAULT);
+            }
         }
 
-        FactionsPlugin.getInstance().getFactionDataHelper().getCache().forEach((factionID, factionData) -> FactionsPlugin.getInstance().getFactionDataHelper().saveFactionData(factionData.get()));
-        plugin.getFlogManager().saveLogs();
+        if (plugin.getFactionDataHelper() != null) {
+            plugin.getFactionDataHelper().getCache().forEach((factionID, factionData) -> plugin.getFactionDataHelper().saveFactionData(factionData.get()));
+        }
+        if (plugin.getFlogManager() != null) {
+            plugin.getFlogManager().saveLogs();
+        }
         saveReserves(plugin);
     }
 

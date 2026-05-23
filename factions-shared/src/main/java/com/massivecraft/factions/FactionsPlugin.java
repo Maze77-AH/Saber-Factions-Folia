@@ -169,6 +169,8 @@ public class FactionsPlugin extends MPlugin {
 
         this.version = VersionProtocol.getMajorCompatibilityVersion();
 
+        Conf.ensureRuntimeDefaults();
+
         if (!preEnable()) {
             this.loadSuccessful = false;
             return;
@@ -322,7 +324,9 @@ public class FactionsPlugin extends MPlugin {
     public void onDisable() {
 
 
-        ShutdownParameter.initShutdown(this);
+        if (loadSuccessful) {
+            ShutdownParameter.initShutdown(this);
+        }
 
         if (this.autoLeaveTaskHandle != null) {
             this.autoLeaveTaskHandle.cancel();
