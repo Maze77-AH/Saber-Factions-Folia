@@ -1,6 +1,5 @@
 package com.massivecraft.factions.cmd;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.FPlayers;
 import com.massivecraft.factions.FactionsPlugin;
@@ -80,7 +79,10 @@ public class CmdInventorySee extends FCommand {
         for (int slot = inventorySize - 9; slot < inventorySize; slot++) {
             ItemStack item = inventory.getItem(slot);
             if (item == null || item.getType() == Material.AIR) {
-                inventory.setItem(slot, XMaterial.GRAY_STAINED_GLASS_PANE.parseItem());
+                ItemStack filler = filler();
+                if (filler != null) {
+                    inventory.setItem(slot, filler);
+                }
             }
         }
 
@@ -90,6 +92,21 @@ public class CmdInventorySee extends FCommand {
         inventory.setItem(inventorySize - 3, armor[0]);
 
         return inventory;
+    }
+
+
+    /**
+     * Resolves the empty-armor-slot filler item lazily via Bukkit's name registry so this
+     * command does not pull in shaded XMaterial. Falls back through legacy material names
+     * and returns {@code null} if no pane material is available on the running runtime
+     * (the slot is left empty in that case rather than crashing the GUI build).
+     */
+    private static ItemStack filler() {
+        Material material = Material.matchMaterial("GRAY_STAINED_GLASS_PANE");
+        if (material == null) {
+            material = Material.matchMaterial("STAINED_GLASS_PANE");
+        }
+        return material != null ? new ItemStack(material) : null;
     }
 
 

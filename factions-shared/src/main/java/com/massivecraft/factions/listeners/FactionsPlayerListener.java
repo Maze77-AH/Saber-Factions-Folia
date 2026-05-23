@@ -1,6 +1,5 @@
 package com.massivecraft.factions.listeners;
 
-import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.*;
 import com.massivecraft.factions.cmd.CmdFGlobal;
 import com.massivecraft.factions.cmd.CmdSeeChunk;
@@ -90,8 +89,6 @@ public class FactionsPlayerListener implements Listener {
     }
 
     public static boolean playerCanUseItemHere(Player player, Location location, Material material, boolean justCheck, PermissableAction permissableAction) {
-        material = XMaterial.matchXMaterial(material).parseMaterial();
-
         if (Conf.playersWhoBypassAllProtection.contains(player.getName())) {
             return true;
         }
@@ -566,13 +563,16 @@ public class FactionsPlayerListener implements Listener {
         if (block == null)
             return;
         if (event.getItem() != null) {
-            type = XMaterial.matchXMaterial(event.getItem().getType().toString()).get().parseMaterial();
+            type = event.getItem().getType();
         } else {
             type = null;
         }
 
         // Allow creeper egging chests
-        if (Conf.allowCreeperEggingChests && (block.getType() == XMaterial.CHEST.parseMaterial() || block.getType() == XMaterial.TRAPPED_CHEST.parseMaterial()) && type == XMaterial.CREEPER_SPAWN_EGG.parseMaterial() && event.getPlayer().isSneaking())
+        if (Conf.allowCreeperEggingChests
+                && (block.getType() == Material.CHEST || block.getType() == Material.TRAPPED_CHEST)
+                && type == Material.CREEPER_SPAWN_EGG
+                && event.getPlayer().isSneaking())
             return;
 
         // Allow interaction with blocks that bypass protection
@@ -622,8 +622,8 @@ public class FactionsPlayerListener implements Listener {
     @EventHandler
     public void onPlayerBoneMeal(PlayerInteractEvent event) {
         Block block = event.getClickedBlock();
-        if (event.getAction() == Action.RIGHT_CLICK_BLOCK && block.getType() == XMaterial.GRASS_BLOCK.parseMaterial()
-                && event.hasItem() && event.getItem().getType() == XMaterial.BONE_MEAL.parseMaterial()) {
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK && block.getType() == Material.GRASS_BLOCK
+                && event.hasItem() && event.getItem().getType() == Material.BONE_MEAL) {
             if (!FactionsBlockListener.playerCanBuildDestroyBlock(event.getPlayer(), block.getLocation(), "build", true)) {
                 FPlayer me = FPlayers.getInstance().getById(event.getPlayer().getUniqueId().toString());
                 Faction myFaction = me.getFaction();

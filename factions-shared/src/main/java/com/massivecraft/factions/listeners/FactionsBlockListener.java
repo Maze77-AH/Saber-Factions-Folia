@@ -134,7 +134,7 @@ public class FactionsBlockListener implements Listener {
     public void onBlockPlace(BlockPlaceEvent event) {
         if (!event.canBuild()) return;
         if (event.getBlockPlaced().getType() == Material.FIRE) return;
-        boolean isSpawner = event.getBlock().getType().equals(XMaterial.SPAWNER.parseMaterial());
+        boolean isSpawner = event.getBlock().getType() == Material.SPAWNER;
         if (!playerCanBuildDestroyBlock(event.getPlayer(), event.getBlock().getLocation(), "build", false)) {
             event.setCancelled(true);
             return;
@@ -273,7 +273,7 @@ public class FactionsBlockListener implements Listener {
             Block block = event.getBlock();
 
             Faction at = Board.getInstance().getFactionAt(FLocation.wrap(block));
-            boolean isSpawner = event.getBlock().getType().equals(XMaterial.matchXMaterial("MOB_SPAWNER").get().parseMaterial());
+            boolean isSpawner = event.getBlock().getType() == Material.SPAWNER;
             if (!playerCanBuildDestroyBlock(event.getPlayer(), event.getBlock().getLocation(), "destroy", false)) {
                 event.setCancelled(true);
                 return;
