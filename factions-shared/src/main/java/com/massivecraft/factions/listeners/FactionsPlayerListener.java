@@ -12,6 +12,7 @@ import com.massivecraft.factions.event.FPlayerLeaveEvent;
 import com.massivecraft.factions.scoreboards.FScoreboard;
 import com.massivecraft.factions.scoreboards.FTeamWrapper;
 import com.massivecraft.factions.scoreboards.sidebar.FDefaultSidebar;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import com.massivecraft.factions.struct.ChatMode;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Relation;
@@ -392,7 +393,7 @@ public class FactionsPlayerListener implements Listener {
 
         me.login(); // set kills / deaths
 
-        Bukkit.getScheduler().runTaskLater(FactionsPlugin.instance, () -> {
+        FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(player, () -> {
             if (me.isOnline()) me.getFaction().sendUnreadAnnouncements(me);
         }, 33L);
 
@@ -443,9 +444,10 @@ public class FactionsPlayerListener implements Listener {
         CmdSeeChunk.seeChunkMap.remove(me.getPlayer().getName());
 
         // if player is waiting for fstuck teleport but leaves, remove
-        Integer stuck = FactionsPlugin.getInstance().getStuckMap().remove(player.getUniqueId());
+        ScheduledTaskHandle stuck = FactionsPlugin.getInstance().getStuckMap().remove(player.getUniqueId());
 
         if (stuck != null) {
+            stuck.cancel();
             FPlayers.getInstance().getByPlayer(player).msg(TL.COMMAND_STUCK_CANCELLED);
             FactionsPlugin.instance.getTimers().remove(player.getUniqueId());
         }
@@ -488,10 +490,12 @@ public class FactionsPlayerListener implements Listener {
         me.setLastStoodAt(to);
 
         if (player.getGameMode() != GameMode.SPECTATOR) { //To Disable Roam Plugins w/AutoClaim On
+            // Auto-claim/unclaim mutate the global Board; route them through the claim transaction
+            // layer (single-writer model thread) instead of mutating from the move event thread.
             if (me.getAutoClaimFor() != null) {
-                me.attemptClaim(me.getAutoClaimFor(), to, true);
+                FactionsPlugin.getInstance().getRealFactionsServices().claims().claim(me, me.getAutoClaimFor(), to, true, null);
             } else if (me.getAutoUnclaimFor() != null) {
-                me.attemptUnclaim(me.getAutoUnclaimFor(), to, true);
+                FactionsPlugin.getInstance().getRealFactionsServices().claims().unclaim(me, me.getAutoUnclaimFor(), to, true, null);
             }
         }
 
@@ -739,9 +743,12 @@ public class FactionsPlayerListener implements Listener {
 
         // if player was banned (not just kicked), get rid of their stored info
         if (Conf.removePlayerDataWhenBanned && event.getReason().equals(Conf.removePlayerDataWhenBannedReason)) {
-            if (badGuy.getRole() == Role.LEADER) badGuy.getFaction().promoteNewLeader();
-            badGuy.leave(false);
-            badGuy.remove();
+            // Leadership/leave/remove are model writes; route them through the single-writer model thread.
+            FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+                if (badGuy.getRole() == Role.LEADER) badGuy.getFaction().promoteNewLeader();
+                badGuy.leave(false);
+                badGuy.remove();
+            });
         }
     }
 

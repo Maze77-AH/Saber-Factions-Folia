@@ -82,5 +82,16 @@ public abstract class Board {
 
     public abstract void forceSave(boolean sync);
 
+    /**
+     * Serialize the current board to its on-disk JSON form. MUST be called on the model thread;
+     * the returned string is an immutable snapshot safe to write from any thread.
+     */
+    public abstract String serializeToJson();
+
+    /**
+     * Write a previously produced JSON snapshot to disk. Safe to call off the model thread.
+     */
+    public abstract void writeJson(String json, boolean sync);
+
     public abstract boolean load();
 }

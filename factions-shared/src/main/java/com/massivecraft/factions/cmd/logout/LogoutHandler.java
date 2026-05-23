@@ -3,7 +3,6 @@ package com.massivecraft.factions.cmd.logout;
 import com.massivecraft.factions.Conf;
 import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.zcore.util.TL;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.metadata.FixedMetadataValue;
 
@@ -38,7 +37,9 @@ public class LogoutHandler {
     public void applyLogoutCooldown(Player player) {
         logoutCooldown.put(player.getUniqueId(), System.currentTimeMillis() + (30 * 1000));
 
-        Bukkit.getScheduler().runTaskLater(FactionsPlugin.getInstance(), () -> {
+        // The delayed logout kick is a Bukkit entity operation; run it on the player's own entity
+        // scheduler (region-safe on Folia).
+        FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(player, () -> {
             if (isLogoutActive(player)) {
                 player.setMetadata("Logout", new FixedMetadataValue(FactionsPlugin.getInstance(), true));
                 player.kickPlayer(String.valueOf(TL.COMMAND_LOGOUT_KICK_MESSAGE));

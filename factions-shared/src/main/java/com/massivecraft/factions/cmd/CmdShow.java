@@ -9,7 +9,6 @@ import com.massivecraft.factions.zcore.util.TagReplacer;
 import com.massivecraft.factions.zcore.util.TagUtil;
 import com.massivecraft.factions.zcore.util.TextUtil;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -85,39 +84,37 @@ public class CmdShow extends FCommand {
         List<Component> fancy = new ArrayList<>(16);
         List<String> finalShow = show;
         Faction finalFaction = faction;
-        Bukkit.getScheduler().runTaskAsynchronously(FactionsPlugin.getInstance(), () -> {
-            for (String raw : finalShow) {
-                String parsed = FactionsPlugin.getInstance().getConfig().getBoolean("relational-show", true) ? TagUtil.parsePlain(finalFaction, context.fPlayer, raw) : TagUtil.parsePlain(finalFaction, raw); // use relations
-                if (parsed == null) {
-                    continue; // Due to minimal f show.
-                }
-
-                if (context.fPlayer != null) {
-                    parsed = TagUtil.parsePlaceholders(context.fPlayer.getPlayer(), parsed);
-                }
-
-                if (TagUtil.hasFancy(parsed)) {
-                    List<Component> localFancy = TagUtil.parseFancy(finalFaction, context.fPlayer, parsed);
-                    if (localFancy != null)
-                        fancy.addAll(localFancy);
-                    continue;
-                }
-                if (!parsed.contains("{notFrozen}") && !parsed.contains("{notPermanent}")) {
-                    if (parsed.contains("{ig}")) {
-                        // replaces all variables with no home TL
-                        parsed = parsed.substring(0, parsed.indexOf("{ig}")) + TL.COMMAND_SHOW_NOHOME;
-                    }
-                    if (parsed.contains("%")) {
-                        parsed = parsed.replaceAll("%", ""); // Just in case it got in there before we disallowed it.
-                    }
-
-                    parsed = TextUtil.parse(parsed);
-                    Component localFancy = TextUtil.parseFancy(parsed).build();
-                    fancy.add(localFancy);
-                }
+        for (String raw : finalShow) {
+            String parsed = FactionsPlugin.getInstance().getConfig().getBoolean("relational-show", true) ? TagUtil.parsePlain(finalFaction, context.fPlayer, raw) : TagUtil.parsePlain(finalFaction, raw); // use relations
+            if (parsed == null) {
+                continue; // Due to minimal f show.
             }
-            Bukkit.getScheduler().runTask(FactionsPlugin.getInstance(), () -> context.sendComponent(fancy));
-        });
+
+            if (context.fPlayer != null) {
+                parsed = TagUtil.parsePlaceholders(context.fPlayer.getPlayer(), parsed);
+            }
+
+            if (TagUtil.hasFancy(parsed)) {
+                List<Component> localFancy = TagUtil.parseFancy(finalFaction, context.fPlayer, parsed);
+                if (localFancy != null)
+                    fancy.addAll(localFancy);
+                continue;
+            }
+            if (!parsed.contains("{notFrozen}") && !parsed.contains("{notPermanent}")) {
+                if (parsed.contains("{ig}")) {
+                    // replaces all variables with no home TL
+                    parsed = parsed.substring(0, parsed.indexOf("{ig}")) + TL.COMMAND_SHOW_NOHOME;
+                }
+                if (parsed.contains("%")) {
+                    parsed = parsed.replaceAll("%", ""); // Just in case it got in there before we disallowed it.
+                }
+
+                parsed = TextUtil.parse(parsed);
+                Component localFancy = TextUtil.parseFancy(parsed).build();
+                fancy.add(localFancy);
+            }
+        }
+        context.sendComponent(fancy);
     }
 
     @Override

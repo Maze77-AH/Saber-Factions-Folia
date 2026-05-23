@@ -31,6 +31,17 @@ public abstract class FPlayers {
 
     public abstract void forceSave(boolean sync);
 
+    /**
+     * Serialize all saveable players to their on-disk JSON form. MUST be called on the model
+     * thread; the returned string is an immutable snapshot safe to write from any thread.
+     */
+    public abstract String serializeToJson();
+
+    /**
+     * Write a previously produced JSON snapshot to disk. Safe to call off the model thread.
+     */
+    public abstract void writeJson(String json, boolean sync);
+
     public abstract FPlayer getByOfflinePlayer(OfflinePlayer player);
 
     public abstract FPlayer getById(String string);

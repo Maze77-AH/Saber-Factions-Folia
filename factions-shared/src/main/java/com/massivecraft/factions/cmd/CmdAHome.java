@@ -1,9 +1,12 @@
 package com.massivecraft.factions.cmd;
 
 import com.massivecraft.factions.FPlayer;
+import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.Faction;
 import com.massivecraft.factions.struct.Permission;
+import com.massivecraft.factions.util.TeleportUtil;
 import com.massivecraft.factions.zcore.util.TL;
+import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 public class CmdAHome extends FCommand {
@@ -33,9 +36,16 @@ public class CmdAHome extends FCommand {
         if (target.isOnline()) {
             Faction faction = target.getFaction();
             if (faction.hasHome()) {
-                target.getPlayer().teleport(faction.getHome(), PlayerTeleportEvent.TeleportCause.PLUGIN);
+                Player targetPlayer = target.getPlayer();
+                if (targetPlayer == null) {
+                    context.msg(TL.COMMAND_AHOME_OFFLINE, target.getName());
+                    return;
+                }
                 context.msg(TL.COMMAND_AHOME_SUCCESS, target.getName());
-                target.msg(TL.COMMAND_AHOME_TARGET);
+                FactionsPlugin.getInstance().getFactionScheduler().runForEntity(targetPlayer, () -> {
+                    TeleportUtil.teleport(targetPlayer, faction.getHome(), PlayerTeleportEvent.TeleportCause.PLUGIN);
+                    target.msg(TL.COMMAND_AHOME_TARGET);
+                });
             } else {
                 context.msg(TL.COMMAND_AHOME_NOHOME, target.getName());
             }

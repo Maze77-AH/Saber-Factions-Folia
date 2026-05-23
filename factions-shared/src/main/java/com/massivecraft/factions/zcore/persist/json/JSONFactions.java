@@ -42,11 +42,20 @@ public class JSONFactions extends MemoryFactions {
     }
 
     public void forceSave(boolean sync) {
+        writeJson(serializeToJson(), sync);
+    }
+
+    @Override
+    public String serializeToJson() {
         final Map<String, JSONFaction> entitiesThatShouldBeSaved = new HashMap<>();
         for (Faction entity : this.factions.values())
             entitiesThatShouldBeSaved.put(entity.getId(), (JSONFaction) entity);
+        return FactionsPlugin.getInstance().getGson().toJson(entitiesThatShouldBeSaved);
+    }
 
-        saveCore(path, entitiesThatShouldBeSaved, sync);
+    @Override
+    public void writeJson(String json, boolean sync) {
+        DiscUtil.writeCatch(path, json, sync);
     }
 
     private boolean saveCore(Path target, Map<String, JSONFaction> entities, boolean sync) {

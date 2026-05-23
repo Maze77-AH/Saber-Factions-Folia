@@ -101,15 +101,17 @@ public class FPromoteCommand extends FCommand {
 
         String action = relative > 0 ? TL.COMMAND_PROMOTE_PROMOTED.toString() : TL.COMMAND_PROMOTE_DEMOTED.toString();
 
-        // Success!
-        target.setRole(promotion);
-        if (target.isOnline()) {
-            target.msg(TL.COMMAND_PROMOTE_TARGET, action, promotion.nicename);
-        }
+        // Success! Route the role write (model state + FPlayerRoleChangeEvent) through the
+        // single-writer model thread. Validation above stays on the command thread.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            target.setRole(promotion);
+            if (target.isOnline()) {
+                target.msg(TL.COMMAND_PROMOTE_TARGET, action, promotion.nicename);
+            }
 
-        context.msg(TL.COMMAND_PROMOTE_SUCCESS, action, target.getName(), promotion.nicename);
-        FactionsPlugin.instance.getFlogManager().log(context.faction, FLogType.ROLE_PERM_EDIT, context.fPlayer.getName(), action, target.getName(), promotion.nicename);
-
+            context.msg(TL.COMMAND_PROMOTE_SUCCESS, action, target.getName(), promotion.nicename);
+            FactionsPlugin.instance.getFlogManager().log(context.faction, FLogType.ROLE_PERM_EDIT, context.fPlayer.getName(), action, target.getName(), promotion.nicename);
+        });
     }
 
     @Override

@@ -59,17 +59,20 @@ public class CmdInvite extends FCommand {
             return;
         }
 
-        context.faction.invite(target);
-        // Send the invitation to the target player when online, otherwise just ignore
-        if (target.isOnline()) {
-            // Tooltips, colors, and commands only apply to the string immediately before it.
-            Component message = TL.COMMAND_INVITE_INVITEDYOU.toFormattedComponent(context.fPlayer.describeTo(target, true), context.faction.getTag())
-                    .hoverEvent(HoverEvent.showText(TL.COMMAND_INVITE_CLICKTOJOIN.toComponent()))
-                    .clickEvent(ClickEvent.runCommand("/" + Conf.baseCommandAliases.get(0) + " join " + context.faction.getTag()));
-            TextUtil.AUDIENCES.player(target.getPlayer()).sendMessage(message);
-        }
-        context.faction.msg(TL.COMMAND_INVITE_INVITED, context.fPlayer.describeTo(context.faction, true), target.describeTo(context.faction));
-        FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.INVITES, context.fPlayer.getName(), CC.Green + "invited", target.getName());
+        // Route the invite-list write (and the dependent notifications) through the single-writer model thread.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            context.faction.invite(target);
+            // Send the invitation to the target player when online, otherwise just ignore
+            if (target.isOnline()) {
+                // Tooltips, colors, and commands only apply to the string immediately before it.
+                Component message = TL.COMMAND_INVITE_INVITEDYOU.toFormattedComponent(context.fPlayer.describeTo(target, true), context.faction.getTag())
+                        .hoverEvent(HoverEvent.showText(TL.COMMAND_INVITE_CLICKTOJOIN.toComponent()))
+                        .clickEvent(ClickEvent.runCommand("/" + Conf.baseCommandAliases.get(0) + " join " + context.faction.getTag()));
+                TextUtil.AUDIENCES.player(target.getPlayer()).sendMessage(message);
+            }
+            context.faction.msg(TL.COMMAND_INVITE_INVITED, context.fPlayer.describeTo(context.faction, true), target.describeTo(context.faction));
+            FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.INVITES, context.fPlayer.getName(), CC.Green + "invited", target.getName());
+        });
     }
 
     @Override

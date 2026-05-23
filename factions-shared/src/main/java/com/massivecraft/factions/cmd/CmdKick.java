@@ -115,22 +115,27 @@ public class CmdKick extends FCommand {
             return;
         }
 
-        toKickFaction.msg(TL.COMMAND_KICK_FACTION, context.fPlayer.describeTo(toKickFaction, true), toKick.describeTo(toKickFaction, true));
+        // Validation, the leave event, and payment above stay on the command thread. The model
+        // writes (promoteNewLeader/deinvite/resetFactionData) and their messages run on the
+        // single-writer model thread.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            toKickFaction.msg(TL.COMMAND_KICK_FACTION, context.fPlayer.describeTo(toKickFaction, true), toKick.describeTo(toKickFaction, true));
 
-        toKick.msg(TL.COMMAND_KICK_KICKED, context.fPlayer.describeTo(toKick, true), toKickFaction.describeTo(toKick));
+            toKick.msg(TL.COMMAND_KICK_KICKED, context.fPlayer.describeTo(toKick, true), toKickFaction.describeTo(toKick));
 
-        if (toKickFaction != context.faction) {
-            context.fPlayer.msg(TL.COMMAND_KICK_KICKS, toKick.describeTo(context.fPlayer), toKickFaction.describeTo(context.fPlayer));
-        }
-        if (Conf.logFactionKick) {
-            Logger.print((context.sender instanceof ConsoleCommandSender ? "A console command" : context.fPlayer.getName()) + " kicked " + toKick.getName() + " from the faction: " + toKickFaction.getTag(), Logger.PrefixType.DEFAULT);
-        }
-        if (toKick.getRole() == Role.LEADER) {
-            toKickFaction.promoteNewLeader();
-        }
-        FactionsPlugin.instance.logFactionEvent(toKickFaction, FLogType.INVITES, context.fPlayer.getName(), CC.Red + "kicked", toKick.getName());
-        toKickFaction.deinvite(toKick);
-        toKick.resetFactionData();
+            if (toKickFaction != context.faction) {
+                context.fPlayer.msg(TL.COMMAND_KICK_KICKS, toKick.describeTo(context.fPlayer), toKickFaction.describeTo(context.fPlayer));
+            }
+            if (Conf.logFactionKick) {
+                Logger.print((context.sender instanceof ConsoleCommandSender ? "A console command" : context.fPlayer.getName()) + " kicked " + toKick.getName() + " from the faction: " + toKickFaction.getTag(), Logger.PrefixType.DEFAULT);
+            }
+            if (toKick.getRole() == Role.LEADER) {
+                toKickFaction.promoteNewLeader();
+            }
+            FactionsPlugin.instance.logFactionEvent(toKickFaction, FLogType.INVITES, context.fPlayer.getName(), CC.Red + "kicked", toKick.getName());
+            toKickFaction.deinvite(toKick);
+            toKick.resetFactionData();
+        });
     }
 
     @Override

@@ -85,11 +85,13 @@ public class CmdAdminFaction extends FCommand {
             return;
         }
 
-        String oldTag = faction.getTag();
-        faction.setTag(tag);
-        FactionsPlugin.instance.logFactionEvent(faction, FLogType.FTAG_EDIT, context.fPlayer.getName(), tag);
-        FTeamWrapper.updatePrefixes(faction);
-        context.msg("&c&l[!] &7Updated admin faction tag from &c%1$s &7to &c%2$s&7.", oldTag, faction.getTag());
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            String oldTag = faction.getTag();
+            faction.setTag(tag);
+            FactionsPlugin.instance.logFactionEvent(faction, FLogType.FTAG_EDIT, context.fPlayer.getName(), tag);
+            FTeamWrapper.updatePrefixes(faction);
+            context.msg("&c&l[!] &7Updated admin faction tag from &c%1$s &7to &c%2$s&7.", oldTag, faction.getTag());
+        });
     }
 
     private void setDescription(CommandContext context) {
@@ -105,10 +107,12 @@ public class CmdAdminFaction extends FCommand {
 
         List<String> parts = context.args.subList(2, context.args.size());
         String desc = TextUtil.implode(parts, " ").replaceAll("%", "").replaceAll("(&([a-f0-9klmnor]))", "& $2");
-        faction.setDescription(desc);
-        FactionsPlugin.instance.logFactionEvent(faction, FLogType.FDESC_EDIT, context.fPlayer.getName(), desc);
-        context.msg("&c&l[!] &7Updated admin faction description for &c%1$s&7.", faction.getTag(context.fPlayer));
-        context.sendMessage(faction.getDescription());
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            faction.setDescription(desc);
+            FactionsPlugin.instance.logFactionEvent(faction, FLogType.FDESC_EDIT, context.fPlayer.getName(), desc);
+            context.msg("&c&l[!] &7Updated admin faction description for &c%1$s&7.", faction.getTag(context.fPlayer));
+            context.sendMessage(faction.getDescription());
+        });
     }
 
     private void setPermission(CommandContext context) {
@@ -156,17 +160,19 @@ public class CmdAdminFaction extends FCommand {
             return;
         }
 
-        boolean success = false;
-        for (Permissable permissable : permissables) {
-            for (PermissableAction permissableAction : permissableActions) {
-                success = faction.setPermission(permissable, permissableAction, access, context.fPlayer);
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            boolean success = false;
+            for (Permissable permissable : permissables) {
+                for (PermissableAction permissableAction : permissableActions) {
+                    success = faction.setPermission(permissable, permissableAction, access, context.fPlayer);
+                }
             }
-        }
 
-        if (success) {
-            context.msg(TL.COMMAND_PERM_SET, context.argAsString(3), access.name(), context.argAsString(2));
-            Logger.print(String.format(TL.COMMAND_PERM_SET.toString(), context.argAsString(3), access.name(), context.argAsString(2)) + " for admin faction " + faction.getTag(), Logger.PrefixType.DEFAULT);
-        }
+            if (success) {
+                context.msg(TL.COMMAND_PERM_SET, context.argAsString(3), access.name(), context.argAsString(2));
+                Logger.print(String.format(TL.COMMAND_PERM_SET.toString(), context.argAsString(3), access.name(), context.argAsString(2)) + " for admin faction " + faction.getTag(), Logger.PrefixType.DEFAULT);
+            }
+        });
     }
 
     private void setHome(CommandContext context) {
@@ -180,8 +186,12 @@ public class CmdAdminFaction extends FCommand {
             return;
         }
 
-        faction.setHome(context.player.getLocation());
-        context.msg(TL.COMMAND_SETHOME_SETOTHER, faction.getTag(context.fPlayer));
+        // Capture the location on the (region-owning) command thread; write on the model thread.
+        final org.bukkit.Location home = context.player.getLocation();
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            faction.setHome(home);
+            context.msg(TL.COMMAND_SETHOME_SETOTHER, faction.getTag(context.fPlayer));
+        });
     }
 
     private Faction requireAdminFaction(CommandContext context, int argIndex) {

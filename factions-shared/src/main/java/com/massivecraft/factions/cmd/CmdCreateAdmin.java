@@ -1,12 +1,12 @@
 package com.massivecraft.factions.cmd;
 
 import com.massivecraft.factions.Conf;
-import com.massivecraft.factions.Faction;
 import com.massivecraft.factions.Factions;
 import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.cmd.reserve.ReserveObject;
 import com.massivecraft.factions.event.FactionCreateEvent;
-import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.realfactions.FactionCreationService;
+import com.massivecraft.factions.realfactions.RealFactionsServices;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.util.Logger;
 import com.massivecraft.factions.util.MiscUtil;
@@ -48,40 +48,41 @@ public class CmdCreateAdmin extends FCommand {
             return;
         }
 
-        Faction faction = Factions.getInstance().createFaction();
-        if (faction == null) {
-            context.msg(TL.COMMAND_CREATE_ERROR);
-            return;
-        }
-
-        faction.setTag(tag);
-        faction.setAdminFaction(true);
-        faction.setPermanent(true);
-
-        if (Conf.econEnabled) {
-            Econ.setBalance(faction.getAccountId(), Conf.econFactionStartingBalance);
-        }
-        if (Conf.allFactionsPeaceful) {
-            faction.setPeaceful(true);
-            faction.setPeacefulExplosionsEnabled(false);
-        }
-        if (FactionsPlugin.getInstance().getFactionDataHelper() != null) {
-            FactionsPlugin.getInstance().getFactionDataHelper().getOrLoadFactionData(faction);
-        }
-
         ReserveObject factionReserve = FactionsPlugin.getInstance().getFactionReserves().stream()
                 .filter(factionReserve1 -> factionReserve1.getFactionName().equalsIgnoreCase(tag))
                 .findFirst()
                 .orElse(null);
-        if (factionReserve != null) {
-            FactionsPlugin.getInstance().getFactionReserves().remove(factionReserve);
-        }
 
-        context.msg(TL.COMMAND_CREATEADMIN_SUCCESS, faction.getTag(context.fPlayer));
+        RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
+        FactionCreationService creation = services.factionCreation();
+        creation.create(faction -> {
+            faction.setTag(tag);
+            faction.setAdminFaction(true);
+            faction.setPermanent(true);
 
-        if (Conf.logFactionCreate) {
-            Logger.print(context.fPlayer.getName() + " created admin faction: " + tag, Logger.PrefixType.DEFAULT);
-        }
+            if (!creation.applyStartingBalance(faction)) {
+                creation.rollbackCreation(faction, null, 0.0D, null);
+                context.msg(TL.COMMAND_CREATE_ERROR);
+                return;
+            }
+
+            if (Conf.allFactionsPeaceful) {
+                faction.setPeaceful(true);
+                faction.setPeacefulExplosionsEnabled(false);
+            }
+            if (FactionsPlugin.getInstance().getFactionDataHelper() != null) {
+                FactionsPlugin.getInstance().getFactionDataHelper().getOrLoadFactionData(faction);
+            }
+            if (factionReserve != null) {
+                FactionsPlugin.getInstance().getFactionReserves().remove(factionReserve);
+            }
+
+            context.msg(TL.COMMAND_CREATEADMIN_SUCCESS, faction.getTag(context.fPlayer));
+
+            if (Conf.logFactionCreate) {
+                Logger.print(context.fPlayer.getName() + " created admin faction: " + tag, Logger.PrefixType.DEFAULT);
+            }
+        }, () -> context.msg(TL.COMMAND_CREATE_ERROR));
     }
 
     @Override

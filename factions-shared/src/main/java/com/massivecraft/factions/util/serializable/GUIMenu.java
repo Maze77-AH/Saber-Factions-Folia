@@ -59,10 +59,15 @@ public abstract class GUIMenu {
             List<HumanEntity> viewing = Lists.newArrayList(this.menu.getViewers());
             this.menu = Bukkit.createInventory(null, size, this.name);
             viewing.forEach((pl) -> {
-                pl.closeInventory();
-                pl.openInventory(this.menu);
-                menus.put(pl.getUniqueId(), this);
-                Logger.print("Reopening Menu for " + pl.getName() + " due to menu changing size from " + oldSize + " -> " + size, Logger.PrefixType.DEFAULT);
+                if (pl instanceof Player) {
+                    Player player = (Player) pl;
+                    FactionsPlugin.getInstance().getFactionScheduler().runForEntity(player, () -> {
+                        player.closeInventory();
+                        player.openInventory(this.menu);
+                        menus.put(player.getUniqueId(), this);
+                        Logger.print("Reopening Menu for " + player.getName() + " due to menu changing size from " + oldSize + " -> " + size, Logger.PrefixType.DEFAULT);
+                    });
+                }
             });
         }
     }
@@ -99,20 +104,21 @@ public abstract class GUIMenu {
     }
 
     public void open(Player player) {
-        GUIMenu openMenu = menus.get(player.getUniqueId());
-        if (openMenu != null) {
-            player.closeInventory();
-            Bukkit.getScheduler().scheduleSyncDelayedTask(FactionsPlugin.instance, () -> {
+        FactionsPlugin.getInstance().getFactionScheduler().runForEntity(player, () -> {
+            GUIMenu openMenu = menus.get(player.getUniqueId());
+            if (openMenu != null) {
+                player.closeInventory();
+                FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(player, () -> {
+                    this.drawItems();
+                    player.openInventory(this.menu);
+                    menus.put(player.getUniqueId(), this);
+                }, 1L);
+            } else {
                 this.drawItems();
                 player.openInventory(this.menu);
                 menus.put(player.getUniqueId(), this);
-            }, 1L);
-        } else {
-            this.drawItems();
-            player.openInventory(this.menu);
-            menus.put(player.getUniqueId(), this);
-        }
-
+            }
+        });
     }
 
     public void fillEmpty(ClickableItemStack item) {

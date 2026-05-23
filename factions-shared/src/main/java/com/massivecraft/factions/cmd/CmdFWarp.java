@@ -3,6 +3,7 @@ package com.massivecraft.factions.cmd;
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.struct.Permission;
+import com.massivecraft.factions.util.TeleportUtil;
 import com.massivecraft.factions.util.WarmUpUtil;
 import com.massivecraft.factions.zcore.fperms.PermissableAction;
 import com.massivecraft.factions.zcore.frame.fwarps.FactionWarpsFrame;
@@ -58,7 +59,7 @@ public class CmdFWarp extends FCommand {
                 context.doWarmUp(WarmUpUtil.Warmup.WARP, TL.WARMUPS_NOTIFY_TELEPORT, warpName, () -> {
                     Player player = Bukkit.getPlayer(uuid);
                     if (player != null) {
-                        player.teleport(fPlayer.getFaction().getWarp(warpName).getLocation());
+                        TeleportUtil.teleport(player, fPlayer.getFaction().getWarp(warpName).getLocation());
                         fPlayer.msg(TL.COMMAND_FWARP_WARPED, warpName);
                     }
                 }, FactionsPlugin.getInstance().getConfig().getLong("warmups.f-warp", 10));

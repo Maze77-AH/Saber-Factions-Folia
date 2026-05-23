@@ -21,6 +21,8 @@ public interface FactionScheduler {
 
     ScheduledTaskHandle runForEntityLater(Entity entity, Runnable task, long delayTicks);
 
+    ScheduledTaskHandle runForEntityTimer(Entity entity, Runnable task, long delayTicks, long periodTicks);
+
     ScheduledTaskHandle runAsync(Runnable task);
 
     ScheduledTaskHandle runAsyncLater(Runnable task, long delayTicks);

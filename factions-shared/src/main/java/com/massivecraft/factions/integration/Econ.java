@@ -58,6 +58,14 @@ public class Econ {
         return econ != null;
     }
 
+    /**
+     * @return the registered Vault economy provider name, or "none" if economy is not hooked.
+     * Used by the RealFactions economy bridge for provider-safety reporting.
+     */
+    public static String getProviderName() {
+        return econ != null ? econ.getName() : "none";
+    }
+
     public static void modifyUniverseMoney(double delta) {
         if (!shouldBeUsed()) return;
         if (Conf.econUniverseAccount == null) return;

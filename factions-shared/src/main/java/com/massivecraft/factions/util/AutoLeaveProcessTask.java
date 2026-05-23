@@ -49,27 +49,30 @@ public class AutoLeaveProcessTask extends BukkitRunnable {
 
             // Check if they should be exempt from this.
             if (!fplayer.willAutoLeave()) {
-                FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> Logger.print(fplayer.getName() + " was going to be auto-removed but was set not to.", Logger.PrefixType.DEFAULT));
+                FactionsPlugin.getInstance().getFactionScheduler().runGlobal(() -> Logger.print(fplayer.getName() + " was going to be auto-removed but was set not to.", Logger.PrefixType.DEFAULT));
                 continue;
             }
             if (fplayer.hasFaction() && fplayer.isOffline() && now - fplayer.getLastLoginTime() > toleranceMillis) {
                 if (Conf.logFactionLeave || Conf.logFactionKick) {
-                    FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> Logger.print("Player " + fplayer.getName() + " was auto-removed due to inactivity.", Logger.PrefixType.DEFAULT));
+                    FactionsPlugin.getInstance().getFactionScheduler().runGlobal(() -> Logger.print("Player " + fplayer.getName() + " was auto-removed due to inactivity.", Logger.PrefixType.DEFAULT));
                 }
 
-                // if player is faction admin, sort out the faction since he's going away
-                if (fplayer.getRole() == Role.LEADER) {
-                    Faction faction = fplayer.getFaction();
-                    if (faction != null) {
-                        fplayer.getFaction().promoteNewLeader(true);
+                // Leadership reassignment, leave, and removal are model writes; route them through
+                // the single-writer model thread. The local-list cleanup stays on the task thread.
+                final FPlayer toRemove = fplayer;
+                FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+                    if (toRemove.getRole() == Role.LEADER) {
+                        Faction faction = toRemove.getFaction();
+                        if (faction != null) {
+                            toRemove.getFaction().promoteNewLeader(true);
+                        }
                     }
-                }
-
-                fplayer.leave(false);
+                    toRemove.leave(false);
+                    if (Conf.autoLeaveDeleteFPlayerData) {
+                        toRemove.remove();
+                    }
+                });
                 iterator.remove();  // go ahead and remove this list's link to the FPlayer object
-                if (Conf.autoLeaveDeleteFPlayerData) {
-                    fplayer.remove();
-                }
             }
         }
 

@@ -54,6 +54,11 @@ public class PaperScheduler implements FactionScheduler {
     }
 
     @Override
+    public ScheduledTaskHandle runForEntityTimer(Entity entity, Runnable task, long delayTicks, long periodTicks) {
+        return runGlobalTimer(task, delayTicks, periodTicks);
+    }
+
+    @Override
     public ScheduledTaskHandle runAsync(Runnable task) {
         return ScheduledTaskHandle.bukkit(Bukkit.getScheduler().runTaskAsynchronously(plugin, task));
     }

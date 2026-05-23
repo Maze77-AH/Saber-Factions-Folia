@@ -43,13 +43,23 @@ public class JSONFPlayers extends MemoryFPlayers {
     }
 
     public void forceSave(boolean sync) {
+        writeJson(serializeToJson(), sync);
+    }
+
+    @Override
+    public String serializeToJson() {
         final Map<String, JSONFPlayer> entitiesThatShouldBeSaved = new HashMap<>(this.fPlayers.size());
         for (FPlayer entity : this.fPlayers.values()) {
             if (((MemoryFPlayer) entity).shouldBeSaved()) {
                 entitiesThatShouldBeSaved.put(entity.getId(), (JSONFPlayer) entity);
             }
         }
-        saveCore(path, entitiesThatShouldBeSaved, sync);
+        return FactionsPlugin.getInstance().getGson().toJson(entitiesThatShouldBeSaved);
+    }
+
+    @Override
+    public void writeJson(String json, boolean sync) {
+        DiscUtil.writeCatch(path, json, sync);
     }
 
     private boolean saveCore(Path target, Map<String, JSONFPlayer> data, boolean sync) {

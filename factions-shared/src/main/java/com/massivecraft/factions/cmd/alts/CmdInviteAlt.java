@@ -72,18 +72,21 @@ public class CmdInviteAlt extends FCommand {
             return;
         }
 
-        context.faction.deinvite(target);
-        context.faction.altInvite(target);
-        if (!target.isOnline()) {
-            return;
-        }
+        // Route the alt invite-list write (and notifications) through the single-writer model thread.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            context.faction.deinvite(target);
+            context.faction.altInvite(target);
+            if (!target.isOnline()) {
+                return;
+            }
 
-        Component message = TL.COMMAND_INVITE_INVITEDYOU.toFormattedComponent(context.fPlayer.describeTo(target, true), context.faction.getTag())
-                .hoverEvent(TL.COMMAND_INVITE_CLICKTOJOIN.toComponent())
-                .clickEvent(ClickEvent.runCommand("/" + Conf.baseCommandAliases.get(0) + " join " + context.faction.getTag()));
-        context.sendComponent(message);
-        FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.INVITES, context.fPlayer.getName(), CC.Green + "invited", target.getName());
-        context.faction.msg(TL.COMMAND_ALTINVITE_INVITED_ALT, context.fPlayer.describeTo(context.faction, true), target.describeTo(context.faction));
+            Component message = TL.COMMAND_INVITE_INVITEDYOU.toFormattedComponent(context.fPlayer.describeTo(target, true), context.faction.getTag())
+                    .hoverEvent(TL.COMMAND_INVITE_CLICKTOJOIN.toComponent())
+                    .clickEvent(ClickEvent.runCommand("/" + Conf.baseCommandAliases.get(0) + " join " + context.faction.getTag()));
+            context.sendComponent(message);
+            FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.INVITES, context.fPlayer.getName(), CC.Green + "invited", target.getName());
+            context.faction.msg(TL.COMMAND_ALTINVITE_INVITED_ALT, context.fPlayer.describeTo(context.faction, true), target.describeTo(context.faction));
+        });
     }
 
     @Override

@@ -9,7 +9,6 @@ import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Role;
 import com.massivecraft.factions.zcore.util.TL;
 import com.massivecraft.factions.zcore.util.TextUtil;
-import org.bukkit.Bukkit;
 
 public class CmdDescription extends FCommand {
 
@@ -32,17 +31,19 @@ public class CmdDescription extends FCommand {
 
     @Override
     public void perform(CommandContext context) {
-        FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> {
-            // if economy is enabled, they're not on the bypass list, and this command has a cost set, make 'em pay
-            if (!context.payForCommand(Conf.econCostDesc, TL.COMMAND_DESCRIPTION_TOCHANGE, TL.COMMAND_DESCRIPTION_FORCHANGE)) {
-                return;
-            }
+        // if economy is enabled, they're not on the bypass list, and this command has a cost set, make 'em pay
+        if (!context.payForCommand(Conf.econCostDesc, TL.COMMAND_DESCRIPTION_TOCHANGE, TL.COMMAND_DESCRIPTION_FORCHANGE)) {
+            return;
+        }
 
-            // since "&" color tags seem to work even through plain old FPlayer.sendMessage() for some reason, we need to break those up
-            // And replace all the % because it messes with string formatting and this is a easy way around that.
-            String desc = TextUtil.implode(context.args, " ").replaceAll("%", "").replaceAll("(&([a-f0-9klmnor]))", "& $2");
+        // since "&" color tags seem to work even through plain old FPlayer.sendMessage() for some reason, we need to break those up
+        // And replace all the % because it messes with string formatting and this is a easy way around that.
+        String desc = TextUtil.implode(context.args, " ").replaceAll("%", "").replaceAll("(&([a-f0-9klmnor]))", "& $2");
+
+        // Route the faction-state write through the single-writer model thread.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
             context.faction.setDescription(desc);
-            Bukkit.getScheduler().scheduleSyncDelayedTask(FactionsPlugin.instance, () -> FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.FDESC_EDIT, context.fPlayer.getName(), desc));
+            FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.FDESC_EDIT, context.fPlayer.getName(), desc);
             if (!Conf.broadcastDescriptionChanges) {
                 context.msg(TL.COMMAND_DESCRIPTION_CHANGED, context.faction.describeTo(context.fPlayer));
                 context.sendMessage(context.faction.getDescription());

@@ -93,19 +93,21 @@ public class CmdColeader extends FCommand {
             return;
         }
 
-        if (you.getRole() == Role.COLEADER) {
-            // Revoke
-            you.setRole(Role.MODERATOR);
-            targetFaction.msg(TL.COMMAND_COLEADER_REVOKED, you.describeTo(targetFaction, true));
-            context.msg(TL.COMMAND_COLEADER_REVOKES, you.describeTo(context.fPlayer, true));
-        } else {
-            // Give
-            you.setRole(Role.COLEADER);
-            targetFaction.msg(TL.COMMAND_COLEADER_PROMOTED, you.describeTo(targetFaction, true));
-            context.msg(TL.COMMAND_COLEADER_PROMOTES, you.describeTo(context.fPlayer, true));
-            FactionsPlugin.instance.getFlogManager().log(targetFaction, FLogType.RANK_EDIT, context.fPlayer.getName(), you.getName(), ChatColor.RED + "Co-Leader");
-        }
-
+        // Route the role write (model state + FPlayerRoleChangeEvent) through the single-writer model thread.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            if (you.getRole() == Role.COLEADER) {
+                // Revoke
+                you.setRole(Role.MODERATOR);
+                targetFaction.msg(TL.COMMAND_COLEADER_REVOKED, you.describeTo(targetFaction, true));
+                context.msg(TL.COMMAND_COLEADER_REVOKES, you.describeTo(context.fPlayer, true));
+            } else {
+                // Give
+                you.setRole(Role.COLEADER);
+                targetFaction.msg(TL.COMMAND_COLEADER_PROMOTED, you.describeTo(targetFaction, true));
+                context.msg(TL.COMMAND_COLEADER_PROMOTES, you.describeTo(context.fPlayer, true));
+                FactionsPlugin.instance.getFlogManager().log(targetFaction, FLogType.RANK_EDIT, context.fPlayer.getName(), you.getName(), ChatColor.RED + "Co-Leader");
+            }
+        });
     }
 
     @Override

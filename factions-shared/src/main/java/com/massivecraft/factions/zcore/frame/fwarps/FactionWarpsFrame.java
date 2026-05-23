@@ -53,7 +53,7 @@ public class FactionWarpsFrame extends SaberGUI {
         WarmUpUtil.process(fme, WarmUpUtil.Warmup.WARP, TL.WARMUPS_NOTIFY_TELEPORT, warp, () -> {
             Player player = Bukkit.getPlayer(fme.getPlayer().getUniqueId());
             if (player != null) {
-                player.teleport(faction.getWarp(warp).getLocation());
+                TeleportUtil.teleport(player, faction.getWarp(warp).getLocation());
                 fme.msg(TL.COMMAND_FWARP_WARPED, warp);
             }
         }, FactionsPlugin.getInstance().getConfig().getLong("warmups.f-warp", 10));
@@ -102,7 +102,7 @@ public class FactionWarpsFrame extends SaberGUI {
                 } else {
                     fplayer.setEnteringPassword(true, warp.getKey());
                     fplayer.msg(TL.COMMAND_FWARP_PASSWORD_REQUIRED);
-                    Bukkit.getScheduler().runTaskLater(FactionsPlugin.getInstance(), () -> {
+                    FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(fplayer.getPlayer(), () -> {
                         if (fplayer.isEnteringPassword()) {
                             fplayer.msg(TL.COMMAND_FWARP_PASSWORD_TIMEOUT);
                             fplayer.setEnteringPassword(false, "");

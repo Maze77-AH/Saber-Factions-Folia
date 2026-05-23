@@ -25,6 +25,7 @@ import com.massivecraft.factions.listeners.*;
 import com.massivecraft.factions.missions.MissionHandler;
 import com.massivecraft.factions.scheduler.FactionScheduler;
 import com.massivecraft.factions.scheduler.FactionSchedulers;
+import com.massivecraft.factions.realfactions.RealFactionsServices;
 import com.massivecraft.factions.missions.TributeInventoryHandler;
 import com.massivecraft.factions.struct.Relation;
 import com.massivecraft.factions.struct.Role;
@@ -107,6 +108,7 @@ public class FactionsPlugin extends MPlugin {
     private boolean mvdwPlaceholderAPIManager = false;
     private CompatibilityModule compatibilityModule;
     private FactionScheduler factionScheduler;
+    private RealFactionsServices realFactionsServices;
 
     public FactionsPlugin() {
         instance = this;
@@ -136,6 +138,10 @@ public class FactionsPlugin extends MPlugin {
         return factionScheduler;
     }
 
+    public RealFactionsServices getRealFactionsServices() {
+        return realFactionsServices;
+    }
+
     public boolean usesBrigadierCompletions() {
         return compatibilityModule != null && compatibilityModule.supportsBrigadier();
     }
@@ -150,6 +156,7 @@ public class FactionsPlugin extends MPlugin {
         RealFactionsDataMigrator.migrateIfNeeded(this);
         this.factionScheduler = FactionSchedulers.create(this);
         Logger.print("Scheduler mode: " + this.factionScheduler.mode(), Logger.PrefixType.DEFAULT);
+        this.realFactionsServices = new RealFactionsServices(this.factionScheduler, getConfig());
 
         if (Bukkit.getPluginManager().getPlugin("Vault") == null) {
             Logger.print("You are missing dependencies!", Logger.PrefixType.FAILED);
@@ -169,9 +176,17 @@ public class FactionsPlugin extends MPlugin {
         // Load Conf from disk
         Conf.load();
 
+        // RealFactions Folia-first overrides take precedence over the loaded configuration.
+        this.realFactionsServices.applyStrictModeOverrides();
+
         StartupParameter.initData(this, () -> {
+            // Model is loaded at this point; start RealFactions background model-thread tasks.
+            this.realFactionsServices.startBackgroundTasks();
+
             if (getConfig().getBoolean("enable-faction-flight", true)) {
-                Bukkit.getServer().getScheduler().runTaskTimer(FactionsPlugin.getInstance(), new FlightEnhance(), 30L, 30L);
+                // Global cadence task; FlightEnhance dispatches each player's check to that player's
+                // own entity scheduler so the flight/location Bukkit access stays region-local.
+                getFactionScheduler().runGlobalTimer(new FlightEnhance(), 30L, 30L);
             }
 
             VersionProtocol.printVersionInfo();

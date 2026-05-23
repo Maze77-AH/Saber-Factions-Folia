@@ -33,69 +33,65 @@ public class CmdTag extends FCommand {
 
     @Override
     public void perform(CommandContext context) {
+        String tag = context.argAsString(0);
 
-        FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> {
+        // TODO does not first test cover selfcase?
+        if (Factions.getInstance().isTagTaken(tag) && !MiscUtil.getComparisonString(tag).equals(context.faction.getComparisonTag())) {
+            context.msg(TL.COMMAND_TAG_TAKEN);
+            return;
+        }
 
+        ArrayList<String> errors = MiscUtil.validateTag(tag);
+        if (errors.size() > 0) {
+            context.sendMessage(errors);
+            return;
+        }
 
-            String tag = context.argAsString(0);
+        // if economy is enabled, they're not on the bypass list, and this command has a cost set, make sure they can pay
+        if (!context.canAffordCommand(Conf.econCostTag, TL.COMMAND_TAG_TOCHANGE.toString())) {
+            return;
+        }
 
-            // TODO does not first test cover selfcase?
-            if (Factions.getInstance().isTagTaken(tag) && !MiscUtil.getComparisonString(tag).equals(context.faction.getComparisonTag())) {
-                context.msg(TL.COMMAND_TAG_TAKEN);
-                return;
-            }
+        if (Cooldown.isOnCooldown(context.player, "tagCooldown") && !context.fPlayer.isAdminBypassing()) {
+            context.msg(TL.COMMAND_COOLDOWN);
+            return;
+        }
 
-            ArrayList<String> errors = MiscUtil.validateTag(tag);
-            if (errors.size() > 0) {
-                context.sendMessage(errors);
-                return;
-            }
+        // trigger the faction rename event (cancellable)
+        FactionRenameEvent renameEvent = new FactionRenameEvent(context.fPlayer, tag);
+        Bukkit.getServer().getPluginManager().callEvent(renameEvent);
+        if (renameEvent.isCancelled()) {
+            return;
+        }
 
-            // if economy is enabled, they're not on the bypass list, and this command has a cost set, make sure they can pay
-            if (!context.canAffordCommand(Conf.econCostTag, TL.COMMAND_TAG_TOCHANGE.toString())) {
-                return;
-            }
+        // then make 'em pay (if applicable)
+        if (!context.payForCommand(Conf.econCostTag, TL.COMMAND_TAG_TOCHANGE, TL.COMMAND_TAG_FORCHANGE)) {
+            return;
+        }
 
-            if (Cooldown.isOnCooldown(context.player, "tagCooldown") && !context.fPlayer.isAdminBypassing()) {
-                context.msg(TL.COMMAND_COOLDOWN);
-                return;
-            }
+        // Route the faction tag write (and the dependent inform/prefix updates) through the
+        // single-writer model thread so the rename is serialized with every other model write.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            String oldtag = context.faction.getTag();
+            context.faction.setTag(tag);
 
-            Bukkit.getScheduler().scheduleSyncDelayedTask(FactionsPlugin.getInstance(), () -> {
-                // trigger the faction rename event (cancellable)
-                FactionRenameEvent renameEvent = new FactionRenameEvent(context.fPlayer, tag);
-                Bukkit.getServer().getPluginManager().callEvent(renameEvent);
-                if (renameEvent.isCancelled()) {
-                    return;
+            FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.FTAG_EDIT, context.fPlayer.getName(), tag);
+
+            // Inform
+            for (FPlayer fplayer : FPlayers.getInstance().getOnlinePlayers()) {
+                if (fplayer.getFactionId().equals(context.faction.getId())) {
+                    fplayer.msg(TL.COMMAND_TAG_FACTION, context.fPlayer.describeTo(context.faction, true), context.faction.getTag(context.faction));
+                    Cooldown.setCooldown(fplayer.getPlayer(), "tagCooldown", FactionsPlugin.getInstance().getConfig().getInt("fcooldowns.f-tag"));
+                    continue;
                 }
-
-                // then make 'em pay (if applicable)
-                if (!context.payForCommand(Conf.econCostTag, TL.COMMAND_TAG_TOCHANGE, TL.COMMAND_TAG_FORCHANGE)) {
-                    return;
+                // Broadcast the tag change (if applicable)
+                if (Conf.broadcastTagChanges) {
+                    Faction faction = fplayer.getFaction();
+                    fplayer.msg(TL.COMMAND_TAG_CHANGED, context.fPlayer.getColorTo(faction) + oldtag, context.faction.getTag(faction));
                 }
-
-
-                String oldtag = context.faction.getTag();
-                context.faction.setTag(tag);
-
-                FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.FTAG_EDIT, context.fPlayer.getName(), tag);
-
-
-                // Inform
-                for (FPlayer fplayer : FPlayers.getInstance().getOnlinePlayers()) {
-                    if (fplayer.getFactionId().equals(context.faction.getId())) {
-                        fplayer.msg(TL.COMMAND_TAG_FACTION, context.fPlayer.describeTo(context.faction, true), context.faction.getTag(context.faction));
-                        Cooldown.setCooldown(fplayer.getPlayer(), "tagCooldown", FactionsPlugin.getInstance().getConfig().getInt("fcooldowns.f-tag"));
-                        continue;
-                    }
-                    // Broadcast the tag change (if applicable)
-                    if (Conf.broadcastTagChanges) {
-                        Faction faction = fplayer.getFaction();
-                        fplayer.msg(TL.COMMAND_TAG_CHANGED, context.fPlayer.getColorTo(faction) + oldtag, context.faction.getTag(faction));
-                    }
-                }
-                FTeamWrapper.updatePrefixes(context.faction);
-            });
+            }
+            // Scoreboard prefix refresh (FTeamWrapper remains on the scoreboard-migration backlog).
+            FTeamWrapper.updatePrefixes(context.faction);
         });
     }
 

@@ -27,8 +27,6 @@ public class CmdJoin extends FCommand {
 
     @Override
     public void perform(CommandContext context) {
-        FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> {
-
             Faction faction = context.argAsFaction(0);
             if (faction == null) return;
 
@@ -140,7 +138,6 @@ public class CmdJoin extends FCommand {
                 }
             }
 
-            FactionsPlugin.getInstance().getServer().getScheduler().scheduleSyncDelayedTask(FactionsPlugin.getInstance(), () -> {
                 FPlayerJoinEvent joinEvent = new FPlayerJoinEvent(FPlayers.getInstance().getByPlayer(context.player), faction, FPlayerJoinEvent.PlayerJoinReason.COMMAND);
                 Bukkit.getServer().getPluginManager().callEvent(joinEvent);
                 if (joinEvent.isCancelled()) {
@@ -151,6 +148,10 @@ public class CmdJoin extends FCommand {
                     return;
                 }
 
+                // Membership writes below are pure model state (setFaction/resetFactionData/setRole/
+                // deinvite). Run them on the single-writer model thread. Validation, the join event,
+                // and payment above stay on the command thread.
+                FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
                 context.msg(TL.COMMAND_JOIN_SUCCESS, fplayer.describeTo(context.fPlayer, true), faction.getTag(context.fPlayer));
 
                 if (!samePlayer) {
@@ -184,8 +185,7 @@ public class CmdJoin extends FCommand {
                         Logger.printArgs(TL.COMMAND_JOIN_MOVEDLOG.toString(), Logger.PrefixType.DEFAULT, context.fPlayer.getName(), fplayer.getName(), faction.getTag());
                     }
                 }
-            });
-        });
+                });
     }
 
     private int getFactionMemberLimit(Faction faction) {

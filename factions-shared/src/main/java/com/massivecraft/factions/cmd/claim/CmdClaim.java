@@ -6,6 +6,7 @@ import com.massivecraft.factions.cmd.CommandContext;
 import com.massivecraft.factions.cmd.CommandRequirements;
 import com.massivecraft.factions.cmd.FCommand;
 import com.massivecraft.factions.cmd.audit.FLogType;
+import com.massivecraft.factions.realfactions.ClaimTransactionService;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Role;
 import com.massivecraft.factions.util.CC;
@@ -15,6 +16,7 @@ import com.massivecraft.factions.util.spiral.generator.SquareSpiralGenerator;
 import com.massivecraft.factions.zcore.fperms.Access;
 import com.massivecraft.factions.zcore.fperms.PermissableAction;
 import com.massivecraft.factions.zcore.util.TL;
+import org.bukkit.Location;
 
 
 public class CmdClaim extends FCommand {
@@ -63,25 +65,39 @@ public class CmdClaim extends FCommand {
             return;
         }
 
-        Faction at = Board.getInstance().getFactionAt(FLocation.wrap(context.fPlayer.getPlayer().getLocation()));
+        final ClaimTransactionService claims = FactionsPlugin.getInstance().getRealFactionsServices().claims();
 
         if (radius < 2) {
-            if (forFaction.isSystemFaction() && context.fPlayer.attemptClaim(forFaction, context.player.getLocation(), false) && FactionsPlugin.cachedRadiusClaim) {
-                context.fPlayer.msg(TL.CLAIM_CLAIMED, context.fPlayer.describeTo(context.fPlayer, true), forFaction.describeTo(context.fPlayer), at.describeTo(forFaction));
-                return;
-            }
-            if (FactionsPlugin.cachedRadiusClaim && context.fPlayer.attemptClaim(forFaction, context.player.getLocation(), false)) {
-                context.fPlayer.getFaction().getFPlayersWhereOnline(true).forEach(f -> f.msg(TL.CLAIM_CLAIMED, context.fPlayer.describeTo(f, true), context.fPlayer.getFaction().describeTo(f), at.describeTo(f)));
-                FactionsPlugin.instance.logFactionEvent(forFaction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.GreenB + "CLAIMED", "1", (FLocation.wrap(context.fPlayer.getPlayer().getLocation())).formatXAndZ(","));
-                return;
-            }
-            context.fPlayer.attemptClaim(forFaction, context.player.getLocation(), true);
-            FactionsPlugin.instance.logFactionEvent(forFaction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.GreenB + "CLAIMED", "1", (FLocation.wrap(context.fPlayer.getPlayer().getLocation())).formatXAndZ(","));
+            // Capture the player's location on the (region-owning) command thread before the
+            // claim transaction runs on the model thread.
+            final Location origin = context.player.getLocation();
+            final FLocation flocation = FLocation.wrap(origin);
+
+            // All board writes for this command run inside one serialized claim transaction.
+            claims.runTransaction(() -> {
+                Faction at = Board.getInstance().getFactionAt(flocation);
+
+                if (forFaction.isSystemFaction() && claims.claimNow(context.fPlayer, forFaction, flocation, false) && FactionsPlugin.cachedRadiusClaim) {
+                    context.fPlayer.msg(TL.CLAIM_CLAIMED, context.fPlayer.describeTo(context.fPlayer, true), forFaction.describeTo(context.fPlayer), at.describeTo(forFaction));
+                    return;
+                }
+                if (FactionsPlugin.cachedRadiusClaim && claims.claimNow(context.fPlayer, forFaction, flocation, false)) {
+                    context.fPlayer.getFaction().getFPlayersWhereOnline(true).forEach(f -> f.msg(TL.CLAIM_CLAIMED, context.fPlayer.describeTo(f, true), context.fPlayer.getFaction().describeTo(f), at.describeTo(f)));
+                    FactionsPlugin.instance.logFactionEvent(forFaction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.GreenB + "CLAIMED", "1", flocation.formatXAndZ(","));
+                    return;
+                }
+                claims.claimNow(context.fPlayer, forFaction, flocation, true);
+                FactionsPlugin.instance.logFactionEvent(forFaction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.GreenB + "CLAIMED", "1", flocation.formatXAndZ(","));
+            });
         } else {
             // radius claim
             if (!Permission.CLAIM_RADIUS.has(context.sender, true)) {
                 return;
             }
+
+            // Capture the origin chunk on the command thread for the completion message.
+            final int originChunkX = context.player.getLocation().getChunk().getX();
+            final int originChunkZ = context.player.getLocation().getChunk().getZ();
 
             new SpiralTask(FLocation.wrap(context.player), radius, new SquareSpiralGenerator()) {
                 private final int limit = Conf.radiusClaimFailureLimit - 1;
@@ -92,11 +108,14 @@ public class CmdClaim extends FCommand {
                 public boolean work(ChunkProcessingContext ctx) {
                     FLocation fLocation = ctx.getFLocation();
 
-                    boolean success = context.fPlayer.attemptClaim(forFaction, fLocation, true);
+                    // The spiral runs on the global region scheduler (the model thread), so each
+                    // claim is serialized with every other model write. claimNow keeps the write
+                    // inside ClaimTransactionService.
+                    boolean success = claims.claimNow(context.fPlayer, forFaction, fLocation, true);
                     if (success) {
                         failCount = 0;
                         successfulClaims++;
-                        FactionsPlugin.instance.logFactionEvent(forFaction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.GreenB + "CLAIMED", "1", (FLocation.wrap(context.fPlayer.getPlayer().getLocation())).formatXAndZ(","));
+                        FactionsPlugin.instance.logFactionEvent(forFaction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.GreenB + "CLAIMED", "1", fLocation.formatXAndZ(","));
                     } else if (failCount++ >= limit) {
                         this.stop();
                         return false;
@@ -112,16 +131,16 @@ public class CmdClaim extends FCommand {
                                     TL.CLAIM_RADIUS_CLAIM,
                                     context.fPlayer.describeTo(context.fPlayer, true),
                                     Integer.toString(successfulClaims),
-                                    context.fPlayer.getPlayer().getLocation().getChunk().getX(),
-                                    context.fPlayer.getPlayer().getLocation().getChunk().getZ()
+                                    originChunkX,
+                                    originChunkZ
                             );
                         } else {
                             context.fPlayer.getFaction().getFPlayersWhereOnline(true).forEach(f -> f.msg(
                                     TL.CLAIM_RADIUS_CLAIM,
                                     context.fPlayer.describeTo(f, true),
                                     Integer.toString(successfulClaims),
-                                    context.fPlayer.getPlayer().getLocation().getChunk().getX(),
-                                    context.fPlayer.getPlayer().getLocation().getChunk().getZ()
+                                    originChunkX,
+                                    originChunkZ
                             ));
                         }
                     }

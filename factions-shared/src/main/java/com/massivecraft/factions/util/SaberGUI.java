@@ -1,6 +1,7 @@
 package com.massivecraft.factions.util;
 
 import com.massivecraft.factions.FactionsPlugin;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import com.massivecraft.factions.util.serializable.InventoryItem;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -28,7 +29,7 @@ public abstract class SaberGUI {
     private ConcurrentMap<Integer, InventoryItem> inventoryItems;
     private String owningPluginName;
     private Runnable closeRunnable;
-    private int refreshTaskId = -1;
+    private ScheduledTaskHandle refreshTask = ScheduledTaskHandle.NOOP;
     private long refreshIntervalTicks = -1;
 
     public SaberGUI(Player player, String title, int size) {
@@ -62,7 +63,7 @@ public abstract class SaberGUI {
         this.owningPluginName = owning.getName();
         UUID id = this.player.getUniqueId();
 
-        Bukkit.getScheduler().runTask(owning, () -> {
+        FactionsPlugin.getInstance().getFactionScheduler().runForEntity(this.player, () -> {
             SaberGUI currentlyActive = activeGUIs.get(id);
             if (currentlyActive != null) currentlyActive.close();
             activeGUIs.put(id, this);
@@ -73,12 +74,12 @@ public abstract class SaberGUI {
 
     public void enableAutoRefresh(JavaPlugin plugin, long intervalTicks) {
         this.refreshIntervalTicks = intervalTicks;
-        if (refreshTaskId != -1) Bukkit.getScheduler().cancelTask(refreshTaskId);
-        this.refreshTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, () -> {
+        refreshTask.cancel();
+        this.refreshTask = FactionsPlugin.getInstance().getFactionScheduler().runForEntityTimer(this.player, () -> {
             if (this.player.getOpenInventory().getTopInventory().equals(this.inventory)) {
                 this.redraw();
             } else {
-                Bukkit.getScheduler().cancelTask(refreshTaskId);
+                refreshTask.cancel();
             }
         }, intervalTicks, intervalTicks);
     }
@@ -97,7 +98,7 @@ public abstract class SaberGUI {
     }
 
     public void closeWithDelay(java.util.function.Consumer<Player> afterClose) {
-        Bukkit.getScheduler().scheduleSyncDelayedTask(FactionsPlugin.getInstance(), () -> {
+        FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(this.player, () -> {
             this.player.closeInventory();
             if (afterClose != null) afterClose.accept(this.player);
         }, 1L);
@@ -112,10 +113,8 @@ public abstract class SaberGUI {
     }
 
     public void close() {
-        if (refreshTaskId != -1) {
-            Bukkit.getScheduler().cancelTask(refreshTaskId);
-            refreshTaskId = -1;
-        }
+        refreshTask.cancel();
+        refreshTask = ScheduledTaskHandle.NOOP;
         this.onInventoryClose();
         this.player.closeInventory();
     }
@@ -159,4 +158,3 @@ public abstract class SaberGUI {
         return this.closeRunnable;
     }
 }
-

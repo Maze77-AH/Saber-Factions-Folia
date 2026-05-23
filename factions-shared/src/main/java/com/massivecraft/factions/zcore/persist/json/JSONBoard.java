@@ -63,7 +63,17 @@ public class JSONBoard extends MemoryBoard {
     }
 
     public void forceSave(boolean sync) {
-        DiscUtil.writeCatch(file, FactionsPlugin.getInstance().getGson().toJson(dumpAsSaveFormat()), sync);
+        writeJson(serializeToJson(), sync);
+    }
+
+    @Override
+    public String serializeToJson() {
+        return FactionsPlugin.getInstance().getGson().toJson(dumpAsSaveFormat());
+    }
+
+    @Override
+    public void writeJson(String json, boolean sync) {
+        DiscUtil.writeCatch(file, json, sync);
     }
 
     public boolean load() {

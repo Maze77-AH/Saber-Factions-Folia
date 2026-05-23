@@ -17,15 +17,29 @@ public class FlightEnhance implements Runnable {
 
     @Override
     public void run() {
+        // Dispatch each player's flight check to that player's own region/entity scheduler. The
+        // body reads the player's location, scans nearby entities, and toggles flight - all Bukkit
+        // entity operations that must run on the owning region thread under Folia. The outer loop
+        // only enumerates online players.
         for (FPlayer player : FPlayers.getInstance().getOnlinePlayers()) {
-            if (shouldSkipPlayer(player)) continue;
-
-            FLocation fLocation = FLocation.wrap(player.getPlayer().getLocation());
-            player.checkIfNearbyEnemies();
-
-            if (!player.hasEnemiesNearby()) {
-                handleFlightStatusForPlayer(player, fLocation);
+            Player p = player.getPlayer();
+            if (p == null) {
+                continue;
             }
+            FactionsPlugin.getInstance().getFactionScheduler().runForEntity(p, () -> checkPlayer(player));
+        }
+    }
+
+    private void checkPlayer(FPlayer player) {
+        if (shouldSkipPlayer(player)) {
+            return;
+        }
+
+        FLocation fLocation = FLocation.wrap(player.getPlayer().getLocation());
+        player.checkIfNearbyEnemies();
+
+        if (!player.hasEnemiesNearby()) {
+            handleFlightStatusForPlayer(player, fLocation);
         }
     }
 

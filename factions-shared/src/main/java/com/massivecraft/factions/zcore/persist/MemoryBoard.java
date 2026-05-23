@@ -68,17 +68,26 @@ public abstract class MemoryBoard extends Board {
             if (player == null) {
                 continue;
             }
-            FLocation standing = FLocation.wrap(player);
-            if (!standing.equals(flocation)) {
-                continue;
-            }
-            if (!onlinePlayer.isAdminBypassing() && onlinePlayer.isFlying()) {
-                onlinePlayer.setFlying(false);
-            }
-            if (onlinePlayer.isWarmingUp()) {
-                onlinePlayer.clearWarmup();
-                onlinePlayer.msg(TL.WARMUPS_CANCELLED);
-            }
+            // Reading the player's location and toggling flight are Bukkit entity operations
+            // that must run on the player's own region/entity thread on Folia. Hand each
+            // per-player check off to that player's entity scheduler. The standing-chunk check
+            // is re-evaluated when it runs, so a player who moved away is correctly skipped.
+            FactionsPlugin.getInstance().getFactionScheduler().runForEntity(player, () -> {
+                if (!player.isOnline()) {
+                    return;
+                }
+                FLocation standing = FLocation.wrap(player);
+                if (!standing.equals(flocation)) {
+                    return;
+                }
+                if (!onlinePlayer.isAdminBypassing() && onlinePlayer.isFlying()) {
+                    onlinePlayer.setFlying(false);
+                }
+                if (onlinePlayer.isWarmingUp()) {
+                    onlinePlayer.clearWarmup();
+                    onlinePlayer.msg(TL.WARMUPS_CANCELLED);
+                }
+            });
         }
 
         clearOwnershipAt(flocation);
@@ -511,15 +520,30 @@ public abstract class MemoryBoard extends Board {
             }
 
             for (FPlayer fPlayer : FPlayers.getInstance().getOnlinePlayers()) {
-                if (this.containsClaim(claims, fPlayer.getLastStoodAt())) {
-                    if (FCmdRoot.instance.fFlyEnabled && !fPlayer.isAdminBypassing() && fPlayer.isFlying()) {
+                // The standing-chunk check uses cached lastStoodAt data, safe on the model thread.
+                if (!this.containsClaim(claims, fPlayer.getLastStoodAt())) {
+                    continue;
+                }
+                Player player = fPlayer.getPlayer();
+                if (player == null) {
+                    continue;
+                }
+                boolean wasFlying = FCmdRoot.instance.fFlyEnabled && !fPlayer.isAdminBypassing() && fPlayer.isFlying();
+                boolean warming = fPlayer.isWarmingUp();
+                if (!wasFlying && !warming) {
+                    continue;
+                }
+                // Toggling flight and messaging are Bukkit entity operations: run them on the
+                // player's own region/entity scheduler, not the model thread that drives unclaimAll.
+                FactionsPlugin.getInstance().getFactionScheduler().runForEntity(player, () -> {
+                    if (wasFlying && fPlayer.isFlying()) {
                         fPlayer.setFlying(false);
                     }
-                    if (fPlayer.isWarmingUp()) {
+                    if (warming && fPlayer.isWarmingUp()) {
                         fPlayer.clearWarmup();
                         fPlayer.msg(TL.WARMUPS_CANCELLED);
                     }
-                }
+                });
             }
 
             for (ChunkRef claim : claims) {

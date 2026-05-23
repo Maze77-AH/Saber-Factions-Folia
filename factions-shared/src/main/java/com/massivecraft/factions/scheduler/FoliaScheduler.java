@@ -58,13 +58,19 @@ public class FoliaScheduler implements FactionScheduler {
     @Override
     public ScheduledTaskHandle runForEntity(Entity entity, Runnable task) {
         Object scheduler = invoke(entity, "getScheduler");
-        return reflectedTask(scheduler, "run", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class}, plugin, asConsumer(task), null);
+        return reflectedTask(scheduler, "run", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class}, plugin, asConsumer(task), noop());
     }
 
     @Override
     public ScheduledTaskHandle runForEntityLater(Entity entity, Runnable task, long delayTicks) {
         Object scheduler = invoke(entity, "getScheduler");
-        return reflectedTask(scheduler, "runDelayed", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class, long.class}, plugin, asConsumer(task), null, delayTicks);
+        return reflectedTask(scheduler, "runDelayed", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class, long.class}, plugin, asConsumer(task), noop(), delayTicks);
+    }
+
+    @Override
+    public ScheduledTaskHandle runForEntityTimer(Entity entity, Runnable task, long delayTicks, long periodTicks) {
+        Object scheduler = invoke(entity, "getScheduler");
+        return reflectedTask(scheduler, "runAtFixedRate", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class, long.class, long.class}, plugin, asConsumer(task), noop(), delayTicks, periodTicks);
     }
 
     @Override
@@ -80,6 +86,11 @@ public class FoliaScheduler implements FactionScheduler {
 
     private static Consumer<Object> asConsumer(Runnable task) {
         return ignored -> task.run();
+    }
+
+    private static Runnable noop() {
+        return () -> {
+        };
     }
 
     private static ScheduledTaskHandle reflectedTask(Object target, String methodName, Class<?>[] parameterTypes, Object... args) {

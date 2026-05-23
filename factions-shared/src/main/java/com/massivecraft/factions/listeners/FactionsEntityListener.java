@@ -83,18 +83,28 @@ public class FactionsEntityListener implements Listener {
         // call Event
         Bukkit.getPluginManager().callEvent(powerLossEvent);
 
-        // Call player onDeath if the event is not cancelled and not using custom power
+        // Power changes are model writes; route them (and the power-dependent message) through the
+        // single-writer model thread. The diedToPlayer metadata is a Bukkit write on the dying
+        // player and stays on this region/event thread.
+        final String msg = powerLossEvent.getMessage();
         if (!powerLossEvent.isCancelled() && !powerLossEvent.usingCustomPower()) {
             if (Conf.deathToPlayerPowerLoss > 0.0 && event.getEntity().getKiller() != null) {
                 player.setMetadata("diedToPlayer", new FixedMetadataValue(FactionsPlugin.getInstance(), true));
             }
-            fplayer.onDeath();
+            FactionsPlugin.getInstance().getRealFactionsServices().executor().runPlayerWrite(() -> {
+                fplayer.onDeath();
+                if (msg != null && !msg.isEmpty()) {
+                    fplayer.msg(msg, fplayer.getPowerRounded(), fplayer.getPowerMaxRounded());
+                }
+            });
         } else if (powerLossEvent.usingCustomPower() && !powerLossEvent.isCancelled()) {
-            fplayer.alterPower(-powerLossEvent.getCustomPowerLost());
-        }
-        // Send the message from the powerLossEvent
-        final String msg = powerLossEvent.getMessage();
-        if (msg != null && !msg.isEmpty()) {
+            FactionsPlugin.getInstance().getRealFactionsServices().executor().runPlayerWrite(() -> {
+                fplayer.alterPower(-powerLossEvent.getCustomPowerLost());
+                if (msg != null && !msg.isEmpty()) {
+                    fplayer.msg(msg, fplayer.getPowerRounded(), fplayer.getPowerMaxRounded());
+                }
+            });
+        } else if (msg != null && !msg.isEmpty()) {
             fplayer.msg(msg, fplayer.getPowerRounded(), fplayer.getPowerMaxRounded());
         }
     }
@@ -184,7 +194,7 @@ public class FactionsEntityListener implements Listener {
                 if (damageee != null && damageee instanceof Player) {
                     cancelFStuckTeleport((Player) damageee);
                     combatList.add(damagee.getUniqueId());
-                    Bukkit.getScheduler().runTaskLater(FactionsPlugin.instance, () -> combatList.remove(damageee.getUniqueId()), 20L * FactionsPlugin.getInstance().getConfig().getInt("ffly.CombatFlyCooldown"));
+                    FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(damageee, () -> combatList.remove(damageee.getUniqueId()), 20L * FactionsPlugin.getInstance().getConfig().getInt("ffly.CombatFlyCooldown"));
                     cancelFFly((Player) damageee);
                 }
 
@@ -192,7 +202,7 @@ public class FactionsEntityListener implements Listener {
                     cancelFStuckTeleport((Player) damager);
                     combatList.add(damager.getUniqueId());
                     Entity finalDamager = damager;
-                    Bukkit.getScheduler().runTaskLater(FactionsPlugin.instance, () -> combatList.remove(finalDamager.getUniqueId()), 20L * FactionsPlugin.getInstance().getConfig().getInt("ffly.CombatFlyCooldown"));
+                    FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(finalDamager, () -> combatList.remove(finalDamager.getUniqueId()), 20L * FactionsPlugin.getInstance().getConfig().getInt("ffly.CombatFlyCooldown"));
                     cancelFFly((Player) damager);
                 }
             } else if (Conf.safeZonePreventAllDamageToPlayers && isPlayerInSafeZone(event.getEntity())) {
@@ -243,7 +253,10 @@ public class FactionsEntityListener implements Listener {
         UUID uuid = player.getUniqueId();
         if (FactionsPlugin.getInstance().getStuckMap().containsKey(uuid))
             FPlayers.getInstance().getByPlayer(player).msg(TL.COMMAND_STUCK_CANCELLED);
-        FactionsPlugin.getInstance().getStuckMap().remove(uuid);
+        com.massivecraft.factions.scheduler.ScheduledTaskHandle task = FactionsPlugin.getInstance().getStuckMap().remove(uuid);
+        if (task != null) {
+            task.cancel();
+        }
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)

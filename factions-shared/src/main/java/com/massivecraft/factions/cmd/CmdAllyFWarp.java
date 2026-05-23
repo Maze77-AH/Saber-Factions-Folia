@@ -5,6 +5,7 @@ import com.massivecraft.factions.Faction;
 import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Relation;
+import com.massivecraft.factions.util.TeleportUtil;
 import com.massivecraft.factions.util.WarmUpUtil;
 import com.massivecraft.factions.zcore.fperms.Access;
 import com.massivecraft.factions.zcore.fperms.PermissableAction;
@@ -84,7 +85,7 @@ public class CmdAllyFWarp extends FCommand {
                 context.doWarmUp(WarmUpUtil.Warmup.WARP, TL.WARMUPS_NOTIFY_TELEPORT, warpName, () -> {
                     Player player = Bukkit.getPlayer(uuid);
                     if (player != null) {
-                        player.teleport(targetFaction.getWarp(warpName).getLocation());
+                        TeleportUtil.teleport(player, targetFaction.getWarp(warpName).getLocation());
                         fPlayer.msg(TL.COMMAND_FWARP_WARPED, warpName);
                     }
                 }, FactionsPlugin.getInstance().getConfig().getLong("warmups.f-warp", 10));

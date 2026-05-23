@@ -91,7 +91,9 @@ public class CmdMod extends FCommand {
     }
 
     private void setRole(FPlayer fp, Role r) {
-        FactionsPlugin.getInstance().getServer().getScheduler().runTask(FactionsPlugin.instance, () -> fp.setRole(r));
+        // Role writes are model state; route through the single-writer model thread instead of the
+        // raw Bukkit scheduler (which is not Folia-compatible).
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> fp.setRole(r));
     }
 
     @Override

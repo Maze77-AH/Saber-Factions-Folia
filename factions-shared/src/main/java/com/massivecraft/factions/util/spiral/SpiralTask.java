@@ -2,6 +2,7 @@ package com.massivecraft.factions.util.spiral;
 
 import com.massivecraft.factions.FLocation;
 import com.massivecraft.factions.FactionsPlugin;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import com.massivecraft.factions.util.Logger;
 import com.massivecraft.factions.util.spiral.coord.ChunkCoord;
 import com.massivecraft.factions.util.spiral.generator.SpiralGenerator;
@@ -17,7 +18,7 @@ public abstract class SpiralTask implements Runnable {
     private final AdaptiveBatchExecutor batchExecutor = new AdaptiveBatchExecutor();
 
     private boolean active = false;
-    private int taskId = -1;
+    private ScheduledTaskHandle taskHandle;
 
     public SpiralTask(FLocation center, int radius, SpiralGenerator generator) {
         this.worldName = center.getWorldName();
@@ -37,7 +38,9 @@ public abstract class SpiralTask implements Runnable {
         }
 
         this.active = true;
-        this.taskId = Bukkit.getScheduler().runTaskTimer(FactionsPlugin.getInstance(), this, 1, 1).getTaskId();
+        // Board state is global model state, so the spiral runs on the global region scheduler.
+        // On Paper this is the main thread; on Folia this is the global region thread.
+        this.taskHandle = FactionsPlugin.getInstance().getFactionScheduler().runGlobalTimer(this, 1, 1);
         Logger.print("[SpiralTask] Started with " + progressTracker.getTotalChunks() + " chunks.", Logger.PrefixType.DEFAULT);
     }
 
@@ -90,9 +93,9 @@ public abstract class SpiralTask implements Runnable {
     public void stop() {
         if (!active) return;
         active = false;
-        if (taskId != -1) {
-            Bukkit.getScheduler().cancelTask(taskId);
-            taskId = -1;
+        if (taskHandle != null) {
+            taskHandle.cancel();
+            taskHandle = null;
         }
         if (spiralQueue != null) spiralQueue.clear();
     }

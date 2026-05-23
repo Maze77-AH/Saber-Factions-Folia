@@ -4,7 +4,10 @@ import com.massivecraft.factions.*;
 import com.massivecraft.factions.cmd.reserve.ReserveObject;
 import com.massivecraft.factions.event.FPlayerJoinEvent;
 import com.massivecraft.factions.event.FactionCreateEvent;
-import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.Factions;
+import com.massivecraft.factions.realfactions.FactionCreationService;
+import com.massivecraft.factions.realfactions.RealFactionsEconomyService;
+import com.massivecraft.factions.realfactions.RealFactionsServices;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Role;
 import com.massivecraft.factions.util.Cooldown;
@@ -65,7 +68,10 @@ public class CmdCreate extends FCommand {
         }
 
         // if economy is enabled, they're not on the bypass list, and this command has a cost set, make sure they can pay
-        if (!context.canAffordCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE.toString())) {
+        RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
+        RealFactionsEconomyService economy = services.economy();
+        if (economy.applyCommandEconomyCosts()
+                && !context.canAffordCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE.toString())) {
             return;
         }
 
@@ -83,51 +89,59 @@ public class CmdCreate extends FCommand {
         }
 
         // then make 'em pay (if applicable)
-        if (!context.payForCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE, TL.COMMAND_CREATE_FORCREATE)) {
+        if (economy.applyCommandEconomyCosts()
+                && !context.payForCommand(Conf.econCostCreate, TL.COMMAND_CREATE_TOCREATE, TL.COMMAND_CREATE_FORCREATE)) {
             return;
         }
 
-        Faction faction = Factions.getInstance().createFaction();
-
-        // TODO: Why would this even happen??? Auto increment clash??
-        if (faction == null) {
-            context.msg(TL.COMMAND_CREATE_ERROR);
-            return;
-        }
-
-        // finish setting up the Faction
-        faction.setTag(tag);
-        if (factionReserve != null) {
-            FactionsPlugin.getInstance().getFactionReserves().remove(factionReserve);
-        }
-        // trigger the faction join event for the creator
-        FPlayerJoinEvent joinEvent = new FPlayerJoinEvent(FPlayers.getInstance().getByPlayer(context.player), faction, FPlayerJoinEvent.PlayerJoinReason.CREATE);
-        Bukkit.getServer().getPluginManager().callEvent(joinEvent);
-        // join event cannot be cancelled, or you'll have an empty faction
-        // finish setting up the FPlayer
-        context.fPlayer.setFaction(faction, false);
-        // We should consider adding the role just AFTER joining the faction.
-        // That way we don't have to mess up deleting more stuff.
-        // And prevent the user from being returned to NORMAL after deleting his old faction.
-        context.fPlayer.setRole(Role.LEADER);
-
-        Cooldown.setCooldown(context.fPlayer.getPlayer(), "createCooldown", FactionsPlugin.getInstance().getConfig().getInt("fcooldowns.f-create"));
-        if (FactionsPlugin.getInstance().getConfig().getBoolean("faction-creation-broadcast", true)) {
-            for (FPlayer follower : FPlayers.getInstance().getOnlinePlayers()) {
-                follower.msg(TL.COMMAND_CREATE_CREATED, context.fPlayer.getName(), faction.getTag(follower));
+        final ReserveObject reservedTag = factionReserve;
+        final FactionCreationService creation = services.factionCreation();
+        creation.create(faction -> {
+            faction.setTag(tag);
+            if (reservedTag != null) {
+                FactionsPlugin.getInstance().getFactionReserves().remove(reservedTag);
             }
-        }
-        context.msg(TL.COMMAND_CREATE_YOUSHOULD, FactionsPlugin.getInstance().cmdBase.cmdDescription.getUsageTemplate(context));
-        if (Conf.econEnabled) Econ.setBalance(faction.getAccountId(), Conf.econFactionStartingBalance);
-        if (Conf.logFactionCreate)
-            Logger.print(context.fPlayer.getName() + TL.COMMAND_CREATE_CREATEDLOG + tag, Logger.PrefixType.DEFAULT);
-        if (FactionsPlugin.getInstance().getConfig().getBoolean("fpaypal.Enabled"))
-            context.msg(TL.COMMAND_PAYPALSET_CREATED);
-        if(Conf.allFactionsPeaceful) {
-            faction.setPeaceful(true);
-            faction.setPeacefulExplosionsEnabled(false);
-        }
-        if (Conf.usePermissionHints) context.msg(TL.COMMAND_HINT_PERMISSION);
+
+            FPlayerJoinEvent joinEvent = new FPlayerJoinEvent(
+                    FPlayers.getInstance().getByPlayer(context.player), faction, FPlayerJoinEvent.PlayerJoinReason.CREATE);
+            Bukkit.getServer().getPluginManager().callEvent(joinEvent);
+
+            context.fPlayer.setFaction(faction, false);
+            context.fPlayer.setRole(Role.LEADER);
+
+            if (!creation.applyStartingBalance(faction)) {
+                creation.rollbackCreation(
+                        faction,
+                        context.fPlayer,
+                        Conf.econCostCreate,
+                        TL.COMMAND_CREATE_FORCREATE.toString());
+                context.msg(TL.COMMAND_CREATE_ERROR);
+                return;
+            }
+
+            Cooldown.setCooldown(context.fPlayer.getPlayer(), "createCooldown",
+                    FactionsPlugin.getInstance().getConfig().getInt("fcooldowns.f-create"));
+            if (FactionsPlugin.getInstance().getConfig().getBoolean("faction-creation-broadcast", true)) {
+                for (FPlayer follower : FPlayers.getInstance().getOnlinePlayers()) {
+                    follower.msg(TL.COMMAND_CREATE_CREATED, context.fPlayer.getName(), faction.getTag(follower));
+                }
+            }
+            context.msg(TL.COMMAND_CREATE_YOUSHOULD,
+                    FactionsPlugin.getInstance().cmdBase.cmdDescription.getUsageTemplate(context));
+            if (Conf.logFactionCreate) {
+                Logger.print(context.fPlayer.getName() + TL.COMMAND_CREATE_CREATEDLOG + tag, Logger.PrefixType.DEFAULT);
+            }
+            if (FactionsPlugin.getInstance().getConfig().getBoolean("fpaypal.Enabled")) {
+                context.msg(TL.COMMAND_PAYPALSET_CREATED);
+            }
+            if (Conf.allFactionsPeaceful) {
+                faction.setPeaceful(true);
+                faction.setPeacefulExplosionsEnabled(false);
+            }
+            if (Conf.usePermissionHints) {
+                context.msg(TL.COMMAND_HINT_PERMISSION);
+            }
+        }, () -> context.msg(TL.COMMAND_CREATE_ERROR));
     }
 
     @Override

@@ -8,6 +8,7 @@ import com.massivecraft.factions.cmd.FCommand;
 import com.massivecraft.factions.cmd.audit.FLogType;
 import com.massivecraft.factions.event.LandUnclaimAllEvent;
 import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.realfactions.ClaimTransactionService;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.util.CC;
 import com.massivecraft.factions.util.ChunkReference;
@@ -38,6 +39,7 @@ public class CmdUnclaimall extends FCommand {
 
     @Override
     public void perform(CommandContext context) {
+        final ClaimTransactionService claims = FactionsPlugin.getInstance().getRealFactionsServices().claims();
         Faction target = context.faction;
 
         if (context.args.size() == 1) {
@@ -52,10 +54,13 @@ public class CmdUnclaimall extends FCommand {
                 return;
             }
 
-            Board.getInstance().unclaimAll(target.getId());
-            context.faction.msg(TL.COMMAND_UNCLAIMALL_LOG, context.fPlayer.describeTo(target, true), target.getTag());
-            if (Conf.logLandUnclaims)
-                Logger.print(TL.COMMAND_UNCLAIMALL_LOG.format(context.fPlayer.getName(), context.faction.getTag()), Logger.PrefixType.DEFAULT);
+            final Faction tgt = target;
+            // Board write routed through the transaction layer (single-writer model thread).
+            claims.unclaimAll(tgt.getId(), () -> {
+                context.faction.msg(TL.COMMAND_UNCLAIMALL_LOG, context.fPlayer.describeTo(tgt, true), tgt.getTag());
+                if (Conf.logLandUnclaims)
+                    Logger.print(TL.COMMAND_UNCLAIMALL_LOG.format(context.fPlayer.getName(), context.faction.getTag()), Logger.PrefixType.DEFAULT);
+            });
             return;
         }
 
@@ -76,17 +81,19 @@ public class CmdUnclaimall extends FCommand {
         }
 
         LandUnclaimAllEvent unclaimAllEvent = new LandUnclaimAllEvent(target, context.fPlayer);
-        Bukkit.getScheduler().runTaskLater(FactionsPlugin.getInstance(), () -> Bukkit.getServer().getPluginManager().callEvent(unclaimAllEvent), 1);
+        Bukkit.getServer().getPluginManager().callEvent(unclaimAllEvent);
         if (unclaimAllEvent.isCancelled()) {
             return;
         }
-        int unclaimed = target.getAllClaims().size();
-        Board.getInstance().unclaimAll(target.getId());
-        FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.RedB + "UNCLAIMED", String.valueOf(unclaimed), FLocation.wrap(context.fPlayer.getPlayer().getLocation()).formatXAndZ(","));
-        FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> {
 
+        // Capture region-sensitive and count data on the command thread, then route the board
+        // write through the transaction layer (single-writer model thread).
+        final int unclaimed = target.getAllClaims().size();
+        final FLocation playerLoc = FLocation.wrap(context.fPlayer.getPlayer().getLocation());
+        final Faction tgt = target;
+        claims.unclaimAll(tgt.getId(), () -> {
+            FactionsPlugin.instance.logFactionEvent(context.faction, FLogType.CHUNK_CLAIMS, context.fPlayer.getName(), CC.RedB + "UNCLAIMED", String.valueOf(unclaimed), playerLoc.formatXAndZ(","));
             context.faction.msg(TL.COMMAND_UNCLAIMALL_UNCLAIMED, context.fPlayer.describeTo(context.faction, true));
-
             if (Conf.logLandUnclaims) {
                 Logger.print(TL.COMMAND_UNCLAIMALL_LOG.format(context.fPlayer.getName(), context.faction.getTag()), Logger.PrefixType.DEFAULT);
             }
@@ -99,4 +106,3 @@ public class CmdUnclaimall extends FCommand {
     }
 
 }
-

@@ -114,26 +114,30 @@ public class CmdKickAlt extends FCommand {
         }
 
 
-        toKickFaction.msg(TL.COMMAND_KICK_FACTION, context.fPlayer.describeTo(toKickFaction, true), toKick.describeTo(toKickFaction, true));
+        // Model writes (promoteNewLeader/removeAltPlayer/deinvite/resetFactionData) and messages run
+        // on the single-writer model thread; validation, the leave event, and payment stay above.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            toKickFaction.msg(TL.COMMAND_KICK_FACTION, context.fPlayer.describeTo(toKickFaction, true), toKick.describeTo(toKickFaction, true));
 
-        toKick.msg(TL.COMMAND_KICK_KICKED, context.fPlayer.describeTo(toKick, true), toKickFaction.describeTo(toKick));
+            toKick.msg(TL.COMMAND_KICK_KICKED, context.fPlayer.describeTo(toKick, true), toKickFaction.describeTo(toKick));
 
-        if (toKickFaction != context.faction) {
-            context.msg(TL.COMMAND_KICK_KICKS, toKick.describeTo(context.fPlayer), toKickFaction.describeTo(context.fPlayer));
-        }
+            if (toKickFaction != context.faction) {
+                context.msg(TL.COMMAND_KICK_KICKS, toKick.describeTo(context.fPlayer), toKickFaction.describeTo(context.fPlayer));
+            }
 
-        if (Conf.logFactionKick) {
-            Logger.print((context.sender instanceof ConsoleCommandSender ? "A console command" : context.fPlayer.getName()) + " kicked " + toKick.getName() + " from the faction: " + toKickFaction.getTag(), Logger.PrefixType.DEFAULT);
-        }
-        // SHOULD NOT BE POSSIBLE BUT KEPT INCASE
-        if (toKick.getRole() == Role.LEADER) {
-            toKickFaction.promoteNewLeader();
-        }
+            if (Conf.logFactionKick) {
+                Logger.print((context.sender instanceof ConsoleCommandSender ? "A console command" : context.fPlayer.getName()) + " kicked " + toKick.getName() + " from the faction: " + toKickFaction.getTag(), Logger.PrefixType.DEFAULT);
+            }
+            // SHOULD NOT BE POSSIBLE BUT KEPT INCASE
+            if (toKick.getRole() == Role.LEADER) {
+                toKickFaction.promoteNewLeader();
+            }
 
-        FactionsPlugin.instance.logFactionEvent(toKickFaction, FLogType.INVITES, context.fPlayer.getName(), CC.Red + "kicked alt", toKick.getName());
-        toKickFaction.removeAltPlayer(toKick);
-        toKickFaction.deinvite(toKick);
-        toKick.resetFactionData();
+            FactionsPlugin.instance.logFactionEvent(toKickFaction, FLogType.INVITES, context.fPlayer.getName(), CC.Red + "kicked alt", toKick.getName());
+            toKickFaction.removeAltPlayer(toKick);
+            toKickFaction.deinvite(toKick);
+            toKick.resetFactionData();
+        });
     }
 
     @Override

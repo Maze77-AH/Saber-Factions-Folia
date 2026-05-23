@@ -4,7 +4,10 @@ import com.google.gson.Gson;
 import com.massivecraft.factions.Board;
 import com.massivecraft.factions.Conf;
 import com.massivecraft.factions.FPlayers;
+import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.Factions;
+import com.massivecraft.factions.scheduler.FactionScheduler;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import com.massivecraft.factions.util.Logger;
 import com.massivecraft.factions.zcore.persist.MemoryFPlayers;
 import com.massivecraft.factions.zcore.persist.SaveTask;
@@ -16,6 +19,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
@@ -38,10 +42,10 @@ public abstract class MPlugin extends JavaPlugin {
 
     public String refCommand = "";
     //holds f stuck taskids
-    public Map<UUID, Integer> stuckMap = new HashMap<>();
+    public Map<UUID, ScheduledTaskHandle> stuckMap = new HashMap<>();
 
     protected boolean loadSuccessful = false;
-    private Integer saveTask = null;
+    private ScheduledTaskHandle saveTask = null;
     private boolean autoSave = true;
 
     // Our stored base commands
@@ -98,7 +102,7 @@ public abstract class MPlugin extends JavaPlugin {
         // Register recurring tasks
         if (this.saveTask == null && Conf.saveToFileEveryXMinutes > 0.0) {
             long saveTicks = (long) (1200.0 * Conf.saveToFileEveryXMinutes);
-            this.saveTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this, new SaveTask(this), saveTicks, saveTicks).getTaskId();
+            this.saveTask = getRuntimeScheduler().runGlobalTimer(new SaveTask(this), saveTicks, saveTicks);
         }
         loadLang();
         loadSuccessful = true;
@@ -175,7 +179,7 @@ public abstract class MPlugin extends JavaPlugin {
 
     public void onDisable() {
         if (saveTask != null) {
-            this.getServer().getScheduler().cancelTask(saveTask);
+            saveTask.cancel();
             saveTask = null;
         }
         // only save data if plugin actually loaded successfully
@@ -234,11 +238,28 @@ public abstract class MPlugin extends JavaPlugin {
 
         List<String> args = Arrays.asList(arguments).subList(1, arguments.length);
         if (async) {
-            Bukkit.getScheduler().runTaskAsynchronously(this, () -> command.execute(sender, args));
+            runCommandOnScheduler(sender, () -> command.execute(sender, args));
         } else {
             command.execute(sender, args);
         }
         return true;
+    }
+
+    private void runCommandOnScheduler(CommandSender sender, Runnable commandTask) {
+        FactionScheduler scheduler = getRuntimeScheduler();
+        if (sender instanceof Player) {
+            scheduler.runForEntity((Player) sender, commandTask);
+        } else {
+            scheduler.runGlobal(commandTask);
+        }
+    }
+
+    private FactionScheduler getRuntimeScheduler() {
+        if (this instanceof FactionsPlugin && ((FactionsPlugin) this).getFactionScheduler() != null) {
+            return ((FactionsPlugin) this).getFactionScheduler();
+        }
+
+        return new com.massivecraft.factions.scheduler.PaperScheduler(this);
     }
 
     public boolean handleCommand(CommandSender sender, String commandString) {
@@ -256,7 +277,7 @@ public abstract class MPlugin extends JavaPlugin {
 
     }
 
-    public Map<UUID, Integer> getStuckMap() {
+    public Map<UUID, ScheduledTaskHandle> getStuckMap() {
         return this.stuckMap;
     }
 

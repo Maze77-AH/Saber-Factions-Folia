@@ -42,7 +42,10 @@ public class FTeamWrapper {
             return;
 
         if (updating.add(faction)) {
-            Bukkit.getScheduler().runTask(FactionsPlugin.getInstance(), () -> {
+            // Dispatch via the scheduler abstraction so it does not throw on Folia. NOTE: applyUpdates
+            // still touches per-player scoreboards and needs per-player region scheduling (tracked as
+            // the scoreboard scheduler backlog).
+            FactionsPlugin.getInstance().getFactionScheduler().runGlobal(() -> {
                 updating.remove(faction);
                 applyUpdates(faction);
             });

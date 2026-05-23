@@ -4,6 +4,7 @@ import com.massivecraft.factions.*;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Relation;
 import com.massivecraft.factions.struct.Role;
+import com.massivecraft.factions.util.TeleportUtil;
 import com.massivecraft.factions.util.WarmUpUtil;
 import com.massivecraft.factions.zcore.fperms.Access;
 import com.massivecraft.factions.zcore.fperms.PermissableAction;
@@ -137,9 +138,11 @@ public class CmdHome extends FCommand {
                 smokeLocations.add(loc.add(0, 1, 0));
                 smokeLocations.add(context.faction.getHome());
                 smokeLocations.add(context.faction.getHome().clone().add(0, 1, 0));
-                SmokeUtil.spawnCloudRandom(smokeLocations, Conf.homesTeleportCommandSmokeEffectThickness);
+                for (Location smokeLocation : smokeLocations) {
+                    FactionsPlugin.getInstance().getFactionScheduler().runAt(smokeLocation, () -> SmokeUtil.spawnCloudRandom(smokeLocation, Conf.homesTeleportCommandSmokeEffectThickness));
+                }
             }
-            context.player.teleport(context.faction.getHome());
+            TeleportUtil.teleport(context.player, context.faction.getHome());
         }, FactionsPlugin.getInstance().getConfig().getLong("warmups.f-home", 15));
     }
 

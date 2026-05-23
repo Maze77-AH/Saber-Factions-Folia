@@ -1,10 +1,12 @@
 package com.massivecraft.factions.listeners;
 
 import com.massivecraft.factions.*;
+import com.massivecraft.factions.realfactions.snapshot.ChatPlayerSnapshot;
 import com.massivecraft.factions.struct.ChatMode;
 import com.massivecraft.factions.struct.Relation;
 import com.massivecraft.factions.struct.Role;
 import com.massivecraft.factions.util.Logger;
+import com.massivecraft.factions.util.TeleportUtil;
 import com.massivecraft.factions.util.WarmUpUtil;
 import com.massivecraft.factions.zcore.util.TL;
 import com.massivecraft.factions.zcore.util.TextUtil;
@@ -45,13 +47,19 @@ public class FactionsChatListener implements Listener {
             String censoredMessage = ChatColor.DARK_GRAY + CHAT_PATTERN.matcher(msg).replaceAll("*");
             me.sendMessage(censoredMessage);
 
-            if (myFaction.isWarpPassword(me.getEnteringWarp(), msg)) {
-                doWarmup(me.getEnteringWarp(), me);
-            } else {
-                me.msg(TL.COMMAND_FWARP_INVALID_PASSWORD);
-            }
-
-            me.setEnteringPassword(false, "");
+            // AsyncPlayerChatEvent runs off-thread. Validating the warp password traverses
+            // mutable faction warp state and clearing the password-entry flag mutates the
+            // FPlayer, so hand that work to the player's own scheduler instead of touching
+            // model state from the async chat thread. The warmup itself is already scheduled.
+            FactionsPlugin.getInstance().getFactionScheduler().runForEntity(talkingPlayer, () -> {
+                String warp = me.getEnteringWarp();
+                if (myFaction.isWarpPassword(warp, msg)) {
+                    doWarmup(warp, me);
+                } else {
+                    me.msg(TL.COMMAND_FWARP_INVALID_PASSWORD);
+                }
+                me.setEnteringPassword(false, "");
+            });
             return;
         }
 
@@ -151,11 +159,17 @@ public class FactionsChatListener implements Listener {
         String msg = event.getMessage();
         String eventFormat = event.getFormat();
         FPlayer me = FPlayers.getInstance().getByPlayer(talkingPlayer);
+        // Prefer immutable cached display data (refreshed on the model thread) so this async
+        // handler does not read the live model for the common tag insertion. Fall back to a live
+        // read only on a cache miss (e.g. within the first refresh window after a player joins).
+        ChatPlayerSnapshot display = FactionsPlugin.getInstance().getRealFactionsServices().chatCache().get(talkingPlayer.getUniqueId());
+        String myTitle = display != null ? display.title() : me.getTitle();
+        String myChatTag = display != null ? display.chatTag() : me.getChatTag();
         int insertIndex;
 
         if (!Conf.chatTagReplaceString.isEmpty() && eventFormat.contains(Conf.chatTagReplaceString)) {
             // we're using the "replace" method of inserting the faction tags
-            eventFormat = TextUtil.replace(eventFormat, "[FACTION_TITLE]", me.getTitle());
+            eventFormat = TextUtil.replace(eventFormat, "[FACTION_TITLE]", myTitle);
 
             insertIndex = eventFormat.indexOf(Conf.chatTagReplaceString);
             eventFormat = TextUtil.replace(eventFormat, Conf.chatTagReplaceString, "");
@@ -175,10 +189,10 @@ public class FactionsChatListener implements Listener {
             }
         }
 
-        String formatStart = eventFormat.substring(0, insertIndex) + ((Conf.chatTagPadBefore && !me.getChatTag().isEmpty()) ? " " : "");
-        String formatEnd = ((Conf.chatTagPadAfter && !me.getChatTag().isEmpty()) ? " " : "") + eventFormat.substring(insertIndex);
+        String formatStart = eventFormat.substring(0, insertIndex) + ((Conf.chatTagPadBefore && !myChatTag.isEmpty()) ? " " : "");
+        String formatEnd = ((Conf.chatTagPadAfter && !myChatTag.isEmpty()) ? " " : "") + eventFormat.substring(insertIndex);
 
-        String nonColoredMsgFormat = formatStart + me.getChatTag().trim() + formatEnd;
+        String nonColoredMsgFormat = formatStart + myChatTag.trim() + formatEnd;
 
         // Relation Colored?
         if (Conf.chatTagRelationColored) {
@@ -208,7 +222,7 @@ public class FactionsChatListener implements Listener {
         WarmUpUtil.process(fme, WarmUpUtil.Warmup.WARP, TL.WARMUPS_NOTIFY_TELEPORT, warp, () -> {
             Player player = Bukkit.getPlayer(fme.getPlayer().getUniqueId());
             if (player != null) {
-                player.teleport(fme.getFaction().getWarp(warp).getLocation());
+                TeleportUtil.teleport(player, fme.getFaction().getWarp(warp).getLocation());
                 fme.msg(TL.COMMAND_FWARP_WARPED, warp);
             }
         }, FactionsPlugin.getInstance().getConfig().getLong("warmups.f-warp", 10));

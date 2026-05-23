@@ -32,32 +32,32 @@ public class CmdDeinvite extends FCommand {
 
     @Override
     public void perform(CommandContext context) {
-        FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> {
-
-
-            FPlayer you = context.argAsBestFPlayerMatch(0);
-            if (you == null) {
-                Component msg = TL.COMMAND_DEINVITE_CANDEINVITE.toComponent().color(TextUtil.kyoriColor(ChatColor.GOLD));
-                for (String id : context.faction.getInvites()) {
-                    FPlayer fp = FPlayers.getInstance().getById(id);
-                    String name = fp != null ? fp.getName() : id;
-                    msg.append(Component.text(name + " ").color(TextUtil.kyoriColor(ChatColor.WHITE)).hoverEvent(TL.COMMAND_DEINVITE_CLICKTODEINVITE.toFormattedComponent(name)).clickEvent(ClickEvent.runCommand("/" + Conf.baseCommandAliases.get(0) + " deinvite " + name)));
-                }
-                context.sendComponent(msg);
-                return;
+        FPlayer you = context.argAsBestFPlayerMatch(0);
+        if (you == null) {
+            Component msg = TL.COMMAND_DEINVITE_CANDEINVITE.toComponent().color(TextUtil.kyoriColor(ChatColor.GOLD));
+            for (String id : context.faction.getInvites()) {
+                FPlayer fp = FPlayers.getInstance().getById(id);
+                String name = fp != null ? fp.getName() : id;
+                msg.append(Component.text(name + " ").color(TextUtil.kyoriColor(ChatColor.WHITE)).hoverEvent(TL.COMMAND_DEINVITE_CLICKTODEINVITE.toFormattedComponent(name)).clickEvent(ClickEvent.runCommand("/" + Conf.baseCommandAliases.get(0) + " deinvite " + name)));
             }
+            context.sendComponent(msg);
+            return;
+        }
 
-            if (you.getFaction() == context.faction) {
-                context.msg(TL.COMMAND_DEINVITE_ALREADYMEMBER, you.getName(), context.faction.getTag());
-                context.msg(TL.COMMAND_DEINVITE_MIGHTWANT, FCmdRoot.instance.cmdKick.getUsageTemplate(context));
-                return;
-            }
+        if (you.getFaction() == context.faction) {
+            context.msg(TL.COMMAND_DEINVITE_ALREADYMEMBER, you.getName(), context.faction.getTag());
+            context.msg(TL.COMMAND_DEINVITE_MIGHTWANT, FCmdRoot.instance.cmdKick.getUsageTemplate(context));
+            return;
+        }
 
-            context.faction.deinvite(you);
+        // Route the invite-list write through the single-writer model thread.
+        final FPlayer target = you;
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            context.faction.deinvite(target);
 
-            you.msg(TL.COMMAND_DEINVITE_REVOKED, context.fPlayer.describeTo(you), context.faction.describeTo(you));
+            target.msg(TL.COMMAND_DEINVITE_REVOKED, context.fPlayer.describeTo(target), context.faction.describeTo(target));
 
-            context.faction.msg(TL.COMMAND_DEINVITE_REVOKES, context.fPlayer.describeTo(context.faction), you.describeTo(context.faction));
+            context.faction.msg(TL.COMMAND_DEINVITE_REVOKES, context.fPlayer.describeTo(context.faction), target.describeTo(context.faction));
         });
     }
 
@@ -67,4 +67,3 @@ public class CmdDeinvite extends FCommand {
     }
 
 }
-

@@ -2,6 +2,7 @@ package com.massivecraft.factions.cmd;
 
 import com.massivecraft.factions.Conf;
 import com.massivecraft.factions.FPlayer;
+import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Role;
 import com.massivecraft.factions.zcore.util.TL;
@@ -46,10 +47,15 @@ public class CmdTitle extends FCommand {
             return;
         }
 
-        you.setTitle(context.sender, title);
+        // Route the title write (FPlayer model state) through the single-writer model thread.
+        final FPlayer target = you;
+        final String finalTitle = title;
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runPlayerWrite(() -> {
+            target.setTitle(context.sender, finalTitle);
 
-        // Inform
-        context.faction.msg(TL.COMMAND_TITLE_CHANGED, context.fPlayer.describeTo(context.faction, true), you.describeTo(context.faction, true));
+            // Inform
+            context.faction.msg(TL.COMMAND_TITLE_CHANGED, context.fPlayer.describeTo(context.faction, true), target.describeTo(context.faction, true));
+        });
     }
 
     @Override

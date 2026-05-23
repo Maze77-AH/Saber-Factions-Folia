@@ -2,6 +2,7 @@ package com.massivecraft.factions.cmd;
 
 import com.massivecraft.factions.FPlayer;
 import com.massivecraft.factions.Faction;
+import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.util.FastMath;
 import com.massivecraft.factions.util.Logger;
@@ -58,7 +59,9 @@ public class CmdPowerBoost extends FCommand {
             if (targetPower != 0) {
                 targetPower += targetPlayer.getPowerBoost();
             }
-            targetPlayer.setPowerBoost(targetPower);
+            // Power-boost is FPlayer model state; route the write through the single-writer model thread.
+            final double boost = targetPower;
+            FactionsPlugin.getInstance().getRealFactionsServices().executor().runPlayerWrite(() -> targetPlayer.setPowerBoost(boost));
             target = TL.COMMAND_POWERBOOST_PLAYER.format(targetPlayer.getName());
         } else {
             Faction targetFaction = context.argAsFaction(1);
@@ -69,7 +72,9 @@ public class CmdPowerBoost extends FCommand {
             if (targetPower != 0) {
                 targetPower += targetFaction.getPowerBoost();
             }
-            targetFaction.setPowerBoost(targetPower);
+            // Power-boost is Faction model state; route the write through the single-writer model thread.
+            final double boost = targetPower;
+            FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> targetFaction.setPowerBoost(boost));
             target = TL.COMMAND_POWERBOOST_FACTION.format(targetFaction.getTag());
         }
 

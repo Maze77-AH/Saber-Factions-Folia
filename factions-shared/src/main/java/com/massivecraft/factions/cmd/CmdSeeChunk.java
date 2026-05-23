@@ -3,6 +3,7 @@ package com.massivecraft.factions.cmd;
 import com.cryptomorin.xseries.XMaterial;
 import com.massivecraft.factions.FLocation;
 import com.massivecraft.factions.FactionsPlugin;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.util.FastMath;
 import com.massivecraft.factions.util.VisualizeUtil;
@@ -25,7 +26,7 @@ public class CmdSeeChunk extends FCommand {
     //private boolean useParticles;
     //private final ParticleEffect effect = ParticleEffect.REDSTONE;
 
-    private int taskID = -1;
+    private ScheduledTaskHandle taskHandle;
 
 
     //I remade it cause of people getting mad that I had the same seechunk as drtshock
@@ -66,10 +67,10 @@ public class CmdSeeChunk extends FCommand {
     }
 
     private void manageTask() {
-        if (taskID != -1) {
+        if (taskHandle != null) {
             if (seeChunkMap.isEmpty()) {
-                Bukkit.getScheduler().cancelTask(taskID);
-                taskID = -1;
+                taskHandle.cancel();
+                taskHandle = null;
             }
         } else {
             startTask();
@@ -77,7 +78,9 @@ public class CmdSeeChunk extends FCommand {
     }
 
     private void startTask() {
-        taskID = Bukkit.getScheduler().runTaskTimer(FactionsPlugin.getInstance(), () -> {
+        // Global cadence driver; the per-player visualizer work is dispatched to each player's
+        // entity scheduler so the world/block access stays region-local (required on Folia).
+        taskHandle = FactionsPlugin.getInstance().getFactionScheduler().runGlobalTimer(() -> {
             Iterator<Map.Entry<String, Boolean>> iterator = seeChunkMap.entrySet().iterator();
 
             while (iterator.hasNext()) {
@@ -88,10 +91,10 @@ public class CmdSeeChunk extends FCommand {
                     iterator.remove();
                     continue;
                 }
-                showBorders(player);
+                FactionsPlugin.getInstance().getFactionScheduler().runForEntity(player, () -> showBorders(player));
             }
             manageTask();
-        }, 0, interval).getTaskId();
+        }, 0, interval);
     }
 
     private void showBorders(Player me) {

@@ -39,26 +39,28 @@ public class CmdOpen extends FCommand {
             return;
         }
 
-        context.faction.setOpen(!context.faction.getOpen());
+        // Route the open/closed faction write and the inform loop through the single-writer model thread.
+        FactionsPlugin.getInstance().getRealFactionsServices().executor().runFactionWrite(() -> {
+            context.faction.setOpen(!context.faction.getOpen());
 
-        String open = context.faction.getOpen() ? TL.COMMAND_OPEN_OPEN.toString() : TL.COMMAND_OPEN_CLOSED.toString();
+            String open = context.faction.getOpen() ? TL.COMMAND_OPEN_OPEN.toString() : TL.COMMAND_OPEN_CLOSED.toString();
 
-        // Inform
-        for (FPlayer fplayer : FPlayers.getInstance().getOnlinePlayers()) {
-            if (fplayer.getFactionId().equals(context.faction.getId())) {
-                fplayer.msg(TL.COMMAND_OPEN_CHANGES, context.fPlayer.getName(), open);
-                Cooldown.setCooldown(fplayer.getPlayer(), "openCooldown", FactionsPlugin.getInstance().getConfig().getInt("fcooldowns.f-open"));
-                continue;
+            // Inform
+            for (FPlayer fplayer : FPlayers.getInstance().getOnlinePlayers()) {
+                if (fplayer.getFactionId().equals(context.faction.getId())) {
+                    fplayer.msg(TL.COMMAND_OPEN_CHANGES, context.fPlayer.getName(), open);
+                    Cooldown.setCooldown(fplayer.getPlayer(), "openCooldown", FactionsPlugin.getInstance().getConfig().getInt("fcooldowns.f-open"));
+                    continue;
+                }
+                if (!FactionsPlugin.getInstance().getConfig().getBoolean("faction-open-broadcast")) return;
+                fplayer.msg(TL.COMMAND_OPEN_CHANGED, context.faction.getTag(fplayer.getFaction()), open);
             }
-            if (!FactionsPlugin.getInstance().getConfig().getBoolean("faction-open-broadcast")) return;
-            fplayer.msg(TL.COMMAND_OPEN_CHANGED, context.faction.getTag(fplayer.getFaction()), open);
-        }
-        if (!FactionsPlugin.getInstance().getConfig().getBoolean("faction-open-broadcast")) {
-            for (FPlayer fPlayer : context.faction.getFPlayersWhereOnline(true)) {
-                fPlayer.msg(TL.COMMAND_OPEN_CHANGED, context.faction.getTag(fPlayer.getFaction()), open);
+            if (!FactionsPlugin.getInstance().getConfig().getBoolean("faction-open-broadcast")) {
+                for (FPlayer fPlayer : context.faction.getFPlayersWhereOnline(true)) {
+                    fPlayer.msg(TL.COMMAND_OPEN_CHANGED, context.faction.getTag(fPlayer.getFaction()), open);
+                }
             }
-        }
-
+        });
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.massivecraft.factions.cmd;
 import com.massivecraft.factions.*;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.struct.Role;
+import com.massivecraft.factions.util.TeleportUtil;
 import com.massivecraft.factions.util.WarmUpUtil;
 import com.massivecraft.factions.zcore.fperms.Access;
 import com.massivecraft.factions.zcore.fperms.PermissableAction;
@@ -71,7 +72,7 @@ public class CmdCheckpoint extends FCommand {
         if (checkfaction.getId().equals(Factions.getInstance().getWilderness().getId()) || checkfaction.getId().equals(context.faction.getId())) {
             context.msg(TL.COMMAND_CHECKPOINT_GO);
 
-            context.doWarmUp(WarmUpUtil.Warmup.CHECKPOINT, TL.WARMUPS_NOTIFY_TELEPORT, "Checkpoint", () -> context.player.teleport(context.faction.getCheckpoint()), FactionsPlugin.getInstance().getConfig().getLong("warmups.f-checkpoint", 0));
+            context.doWarmUp(WarmUpUtil.Warmup.CHECKPOINT, TL.WARMUPS_NOTIFY_TELEPORT, "Checkpoint", () -> TeleportUtil.teleport(context.player, context.faction.getCheckpoint()), FactionsPlugin.getInstance().getConfig().getLong("warmups.f-checkpoint", 0));
         } else {
             context.msg(TL.COMMAND_CHECKPOINT_CLAIMED);
         }

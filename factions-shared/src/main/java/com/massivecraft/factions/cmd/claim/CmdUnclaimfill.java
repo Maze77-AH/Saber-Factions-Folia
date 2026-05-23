@@ -4,6 +4,7 @@ import com.massivecraft.factions.Board;
 import com.massivecraft.factions.Conf;
 import com.massivecraft.factions.FLocation;
 import com.massivecraft.factions.Faction;
+import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.cmd.CommandContext;
 import com.massivecraft.factions.cmd.CommandRequirements;
 import com.massivecraft.factions.cmd.FCommand;
@@ -15,7 +16,6 @@ import com.massivecraft.factions.zcore.fperms.Access;
 import com.massivecraft.factions.zcore.fperms.PermissableAction;
 import com.massivecraft.factions.zcore.util.TL;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -50,10 +50,15 @@ public class CmdUnclaimfill extends FCommand {
         }
 
         final Faction forFaction = context.argAsFaction(1, context.faction);
-        Location location = context.player.getLocation();
-        FLocation loc = FLocation.wrap(location);
+        // Capture the origin on the (region-owning) command thread before the transaction runs.
+        final FLocation loc = FLocation.wrap(context.player.getLocation());
         final boolean bypass = context.fPlayer.isAdminBypassing();
 
+        // The flood-fill scan and every board removal run as one serialized model-thread transaction.
+        FactionsPlugin.getInstance().getRealFactionsServices().claims().runTransaction(() -> runFill(context, limit, forFaction, loc, bypass));
+    }
+
+    private void runFill(CommandContext context, int limit, Faction forFaction, FLocation loc, boolean bypass) {
         Faction currentFaction = Board.getInstance().getFactionAt(loc);
 
         if (currentFaction != forFaction) {
@@ -155,7 +160,7 @@ public class CmdUnclaimfill extends FCommand {
 
     private boolean attemptUnclaim(CommandContext context, FLocation target, Faction targetFaction, Tracker tracker) {
         if (targetFaction.isSafeZone() || targetFaction.isWarZone()) {
-            Board.getInstance().removeAt(target);
+            FactionsPlugin.getInstance().getRealFactionsServices().claims().removeAtNow(target);
             if (Conf.logLandUnclaims) {
                 Logger.print(TL.COMMAND_UNCLAIM_LOG.format(context.fPlayer.getName(), target.getCoordString(), targetFaction.getTag()), Logger.PrefixType.DEFAULT);
             }
@@ -175,7 +180,7 @@ public class CmdUnclaimfill extends FCommand {
             tracker.refund += Econ.calculateClaimRefund(context.faction.getLandRounded());
         }
 
-        Board.getInstance().removeAt(target);
+        FactionsPlugin.getInstance().getRealFactionsServices().claims().removeAtNow(target);
 
         if (Conf.logLandUnclaims) {
             Logger.print(TL.COMMAND_UNCLAIM_LOG.format(context.fPlayer.getName(), target.getCoordString(), targetFaction.getTag()), Logger.PrefixType.DEFAULT);

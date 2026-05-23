@@ -9,6 +9,7 @@ import com.massivecraft.factions.event.FactionDisbandEvent.PlayerDisbandReason;
 import com.massivecraft.factions.iface.EconomyParticipator;
 import com.massivecraft.factions.iface.RelationParticipator;
 import com.massivecraft.factions.integration.Econ;
+import com.massivecraft.factions.scheduler.ScheduledTaskHandle;
 import com.massivecraft.factions.scoreboards.FScoreboard;
 import com.massivecraft.factions.scoreboards.sidebar.FInfoSidebar;
 import com.massivecraft.factions.struct.ChatMode;
@@ -28,7 +29,6 @@ import org.bukkit.*;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.text.DecimalFormat;
 import java.util.*;
@@ -69,7 +69,7 @@ public abstract class MemoryFPlayer implements FPlayer {
     protected boolean spyingChat = false;
     protected boolean showScoreboard = true;
     protected WarmUpUtil.Warmup warmup;
-    protected int warmupTask;
+    protected transient ScheduledTaskHandle warmupTask = ScheduledTaskHandle.NOOP;
     protected boolean isAdminBypassing = false;
     protected int kills, deaths;
     protected boolean willAutoLeave = true;
@@ -869,10 +869,17 @@ public abstract class MemoryFPlayer implements FPlayer {
         }
 
         if (myFaction.isNormal()) {
-            for (FPlayer fplayer : myFaction.getFPlayersWhereOnline(true))
-                FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> fplayer.msg(TL.LEAVE_LEFT, this.describeTo(fplayer, true), myFaction.describeTo(fplayer)));
+            for (FPlayer fplayer : myFaction.getFPlayersWhereOnline(true)) {
+                Player target = fplayer.getPlayer();
+                Runnable messageTask = () -> fplayer.msg(TL.LEAVE_LEFT, this.describeTo(fplayer, true), myFaction.describeTo(fplayer));
+                if (target != null) {
+                    FactionsPlugin.getInstance().getFactionScheduler().runForEntity(target, messageTask);
+                } else {
+                    FactionsPlugin.getInstance().getFactionScheduler().runGlobal(messageTask);
+                }
+            }
             if (Conf.logFactionLeave)
-                FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> Logger.print(TL.LEAVE_LEFT.format(this.getName(), myFaction.getTag()), Logger.PrefixType.DEFAULT));
+                FactionsPlugin.getInstance().getFactionScheduler().runGlobal(() -> Logger.print(TL.LEAVE_LEFT.format(this.getName(), myFaction.getTag()), Logger.PrefixType.DEFAULT));
         }
         myFaction.removeAnnouncements(this);
         if (this.isAlt()) {
@@ -884,7 +891,12 @@ public abstract class MemoryFPlayer implements FPlayer {
 
 
         FactionsPlugin.instance.logFactionEvent(myFaction, FLogType.INVITES, this.getName(), CC.Red + "left", "the faction");
-        setFlying(false);
+        // Disable flight on the leaving player's own entity scheduler so this remains safe even when
+        // leave() runs on the model thread (Folia). setFlying is a no-op when the player is offline.
+        Player leaver = getPlayer();
+        if (leaver != null) {
+            FactionsPlugin.getInstance().getFactionScheduler().runForEntity(leaver, () -> setFlying(false));
+        }
         if (myFaction.isNormal() && !perm && myFaction.getFPlayers().isEmpty()) {
             // Remove this faction
 
@@ -903,7 +915,7 @@ public abstract class MemoryFPlayer implements FPlayer {
 
             Factions.getInstance().removeFaction(myFaction.getId());
             if (Conf.logFactionDisband)
-                FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance,
+                FactionsPlugin.getInstance().getFactionScheduler().runGlobal(
                         () -> Logger.print(TL.LEAVE_DISBANDEDLOG.format(myFaction.getTag(), myFaction.getId(),
                                 this.getName()).replace("{claims}", myFaction.getAllClaims().size() + ""), Logger.PrefixType.DEFAULT));
         }
@@ -1176,12 +1188,8 @@ public abstract class MemoryFPlayer implements FPlayer {
             // Otherwise, start a timer and have this cancel after a few seconds.
             if (cooldown > 0) {
                 setTakeFallDamage(false);
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        setTakeFallDamage(true);
-                    }
-                }.runTaskLater(FactionsPlugin.getInstance(), 20L * cooldown);
+                // Per-player delayed task: use the entity scheduler so it is region-safe on Folia.
+                FactionsPlugin.getInstance().getFactionScheduler().runForEntityLater(player, () -> setTakeFallDamage(true), 20L * cooldown);
             }
         }
 
@@ -1379,7 +1387,7 @@ public abstract class MemoryFPlayer implements FPlayer {
     @Override
     public void clearWarmup() {
         if (warmup != null) {
-            Bukkit.getScheduler().cancelTask(warmupTask);
+            warmupTask.cancel();
             this.stopWarmup();
         }
     }
@@ -1400,10 +1408,10 @@ public abstract class MemoryFPlayer implements FPlayer {
     }
 
     @Override
-    public void addWarmup(WarmUpUtil.Warmup warmup, int taskId) {
+    public void addWarmup(WarmUpUtil.Warmup warmup, ScheduledTaskHandle taskHandle) {
         if (this.warmup != null) this.clearWarmup();
         this.warmup = warmup;
-        this.warmupTask = taskId;
+        this.warmupTask = taskHandle == null ? ScheduledTaskHandle.NOOP : taskHandle;
     }
 
     public void checkIfNearbyEnemies() {
@@ -1593,7 +1601,7 @@ public abstract class MemoryFPlayer implements FPlayer {
         Board.getInstance().setFactionAt(forFaction, flocation);
 
         if (Conf.logLandClaims) {
-            FactionsPlugin.getInstance().getServer().getScheduler().runTaskAsynchronously(FactionsPlugin.instance, () -> Logger.printArgs(TL.CLAIM_CLAIMEDLOG.toString(), Logger.PrefixType.DEFAULT, this.getName(), flocation.getCoordString(), forFaction.getTag()));
+            FactionsPlugin.getInstance().getFactionScheduler().runGlobal(() -> Logger.printArgs(TL.CLAIM_CLAIMEDLOG.toString(), Logger.PrefixType.DEFAULT, this.getName(), flocation.getCoordString(), forFaction.getTag()));
         }
 
         return true;
