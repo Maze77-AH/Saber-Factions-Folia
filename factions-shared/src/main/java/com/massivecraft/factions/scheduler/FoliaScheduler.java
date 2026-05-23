@@ -37,12 +37,12 @@ public class FoliaScheduler implements FactionScheduler {
 
     @Override
     public ScheduledTaskHandle runGlobalLater(Runnable task, long delayTicks) {
-        return reflectedTask(globalScheduler, "runDelayed", new Class<?>[]{Plugin.class, Consumer.class, long.class}, plugin, asConsumer(task), delayTicks);
+        return reflectedTask(globalScheduler, "runDelayed", new Class<?>[]{Plugin.class, Consumer.class, long.class}, plugin, asConsumer(task), sanitizeTicks(delayTicks));
     }
 
     @Override
     public ScheduledTaskHandle runGlobalTimer(Runnable task, long delayTicks, long periodTicks) {
-        return reflectedTask(globalScheduler, "runAtFixedRate", new Class<?>[]{Plugin.class, Consumer.class, long.class, long.class}, plugin, asConsumer(task), delayTicks, periodTicks);
+        return reflectedTask(globalScheduler, "runAtFixedRate", new Class<?>[]{Plugin.class, Consumer.class, long.class, long.class}, plugin, asConsumer(task), sanitizeTicks(delayTicks), sanitizeTicks(periodTicks));
     }
 
     @Override
@@ -52,7 +52,7 @@ public class FoliaScheduler implements FactionScheduler {
 
     @Override
     public ScheduledTaskHandle runAtLater(Location location, Runnable task, long delayTicks) {
-        return reflectedTask(regionScheduler, "runDelayed", new Class<?>[]{Plugin.class, Location.class, Consumer.class, long.class}, plugin, location, asConsumer(task), delayTicks);
+        return reflectedTask(regionScheduler, "runDelayed", new Class<?>[]{Plugin.class, Location.class, Consumer.class, long.class}, plugin, location, asConsumer(task), sanitizeTicks(delayTicks));
     }
 
     @Override
@@ -64,13 +64,13 @@ public class FoliaScheduler implements FactionScheduler {
     @Override
     public ScheduledTaskHandle runForEntityLater(Entity entity, Runnable task, long delayTicks) {
         Object scheduler = invoke(entity, "getScheduler");
-        return reflectedTask(scheduler, "runDelayed", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class, long.class}, plugin, asConsumer(task), noop(), delayTicks);
+        return reflectedTask(scheduler, "runDelayed", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class, long.class}, plugin, asConsumer(task), noop(), sanitizeTicks(delayTicks));
     }
 
     @Override
     public ScheduledTaskHandle runForEntityTimer(Entity entity, Runnable task, long delayTicks, long periodTicks) {
         Object scheduler = invoke(entity, "getScheduler");
-        return reflectedTask(scheduler, "runAtFixedRate", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class, long.class, long.class}, plugin, asConsumer(task), noop(), delayTicks, periodTicks);
+        return reflectedTask(scheduler, "runAtFixedRate", new Class<?>[]{Plugin.class, Consumer.class, Runnable.class, long.class, long.class}, plugin, asConsumer(task), noop(), sanitizeTicks(delayTicks), sanitizeTicks(periodTicks));
     }
 
     @Override
@@ -80,8 +80,21 @@ public class FoliaScheduler implements FactionScheduler {
 
     @Override
     public ScheduledTaskHandle runAsyncLater(Runnable task, long delayTicks) {
-        long delayMillis = Math.max(0L, delayTicks) * 50L;
+        long delayMillis = sanitizeTicks(delayTicks) * 50L;
         return reflectedTask(asyncScheduler, "runDelayed", new Class<?>[]{Plugin.class, Consumer.class, long.class, TimeUnit.class}, plugin, asConsumer(task), delayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Folia's global, region, entity, and async schedulers all reject initial delays
+     * and periods that are {@code <= 0} with {@code IllegalArgumentException}. The
+     * Bukkit/Paper scheduler tolerates {@code 0} ("run on next tick"), so call sites
+     * across the codebase pass {@code 0L} for "as soon as possible". Normalize here
+     * to a single tick so the abstraction behaves the same on Paper and Folia.
+     *
+     * <p>Visible for tests.</p>
+     */
+    static long sanitizeTicks(long ticks) {
+        return ticks > 0L ? ticks : 1L;
     }
 
     private static Consumer<Object> asConsumer(Runnable task) {
