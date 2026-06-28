@@ -56,6 +56,15 @@ public class CmdCreateAdmin extends FCommand {
         RealFactionsServices services = FactionsPlugin.getInstance().getRealFactionsServices();
         FactionCreationService creation = services.factionCreation();
         creation.create(faction -> {
+            // Re-check tag uniqueness on the model thread (single-writer). The earlier check ran on
+            // the command/region thread and, on Folia, the create transaction is scheduled
+            // separately, so a tag could be claimed in the gap. Remove the empty faction if so.
+            if (Factions.getInstance().isTagTaken(tag)) {
+                creation.rollbackCreation(faction, null, 0.0D, null);
+                context.msg(TL.COMMAND_CREATE_INUSE);
+                return;
+            }
+
             faction.setTag(tag);
             faction.setAdminFaction(true);
             faction.setPermanent(true);

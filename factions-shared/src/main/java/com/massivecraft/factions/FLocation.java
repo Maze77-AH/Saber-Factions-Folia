@@ -12,15 +12,19 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public final class FLocation implements Serializable {
 
-    private static final Map<String, LoadingCache<Long, FLocation>> CACHE = new HashMap<>(Bukkit.getWorlds().size());
+    // Keyed by world name; wrap() is one of the hottest paths in the plugin and is called from every
+    // region thread on Folia. A plain HashMap.computeIfAbsent here races (corruption / resize spin),
+    // so this must be a ConcurrentHashMap (its computeIfAbsent is atomic; the inner Guava cache is
+    // already thread-safe).
+    private static final Map<String, LoadingCache<Long, FLocation>> CACHE = new ConcurrentHashMap<>();
 
     private static final long serialVersionUID = -8292915234027387983L;
     private static boolean WORLD_BORDER_SUPPORT;

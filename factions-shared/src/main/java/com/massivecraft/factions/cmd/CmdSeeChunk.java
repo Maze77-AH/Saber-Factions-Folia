@@ -13,14 +13,15 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CmdSeeChunk extends FCommand {
 
-    //Used a hashmap cuz imma make a particle selection gui later, will store it where the boolean is rn.
-    public static HashMap<String, Boolean> seeChunkMap = new HashMap<>();
+    // Concurrent: written from commands, removed from move/quit listeners, and iterated by the
+    // particle task - all across region threads on Folia (a HashMap would race / throw CME).
+    public static Map<String, Boolean> seeChunkMap = new ConcurrentHashMap<>();
     Long interval;
     //private boolean useParticles;
     //private final ParticleEffect effect = ParticleEffect.REDSTONE;

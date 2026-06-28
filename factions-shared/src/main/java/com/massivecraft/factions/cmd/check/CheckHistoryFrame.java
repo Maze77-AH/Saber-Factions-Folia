@@ -7,13 +7,11 @@ import com.massivecraft.factions.Faction;
 import com.massivecraft.factions.FactionsPlugin;
 import com.massivecraft.factions.zcore.frame.FactionGUI;
 import com.massivecraft.factions.zcore.util.TL;
-import org.bukkit.DyeColor;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.material.MaterialData;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -51,33 +49,44 @@ public class CheckHistoryFrame implements FactionGUI {
                 continue;
             }
 
-            ItemStack itemStack = new ItemStack(XMaterial.MAGENTA_STAINED_GLASS_PANE.parseItem());
-            MaterialData data = itemStack.getData();
-            ItemMeta itemMeta = itemStack.getItemMeta();
-            if (entry.getValue().startsWith("U")) {
-                itemStack.setDurability((short) 2);
-                data.setData(DyeColor.MAGENTA.getWoolData());
-                itemMeta.setDisplayName(TL.CHECK_WALLS_CHECKED_GUI_ICON.toString());
-                itemMeta.setLore(Arrays.asList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey()))), TL.CHECK_PLAYER_LORE_LINE.format(entry.getValue().substring(1))));
-            } else if (entry.getValue().startsWith("Y")) {
-                itemStack.setDurability((short) 2);
-                data.setData(DyeColor.MAGENTA.getWoolData());
-                itemMeta.setDisplayName(TL.CHECK_BUFFERS_CHECKED_GUI_ICON.toString());
-                itemMeta.setLore(Arrays.asList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey()))), TL.CHECK_PLAYER_LORE_LINE.format(entry.getValue().substring(1))));
-            } else if (entry.getValue().startsWith("J")) {
-                itemStack.setDurability((short) 0);
-                data.setData(DyeColor.WHITE.getWoolData());
-                itemMeta.setDisplayName(TL.CHECK_WALLS_UNCHECKED_GUI_ICON.toString());
-                itemMeta.setLore(Collections.singletonList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey())))));
-            } else if (entry.getValue().startsWith("H")) {
-                itemStack.setDurability((short) 0);
-                data.setData(DyeColor.WHITE.getWoolData());
-                itemMeta.setDisplayName(TL.CHECK_BUFFERS_UNCHECKED_GUI_ICON.toString());
-                itemMeta.setLore(Collections.singletonList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey())))));
+            // Choose a distinct coloured pane material per entry type. The legacy approach recoloured a
+            // single MAGENTA pane via setDurability/MaterialData, which is ignored on modern Minecraft
+            // (1.13+) - colour is encoded in the Material itself now, so checked/unchecked panes used
+            // to render identically. Pick the correct Material directly instead.
+            String value = entry.getValue();
+            XMaterial paneMaterial;
+            String displayName;
+            List<String> lore;
+            if (value.startsWith("U")) {
+                paneMaterial = XMaterial.MAGENTA_STAINED_GLASS_PANE;
+                displayName = TL.CHECK_WALLS_CHECKED_GUI_ICON.toString();
+                lore = Arrays.asList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey()))), TL.CHECK_PLAYER_LORE_LINE.format(value.substring(1)));
+            } else if (value.startsWith("Y")) {
+                paneMaterial = XMaterial.MAGENTA_STAINED_GLASS_PANE;
+                displayName = TL.CHECK_BUFFERS_CHECKED_GUI_ICON.toString();
+                lore = Arrays.asList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey()))), TL.CHECK_PLAYER_LORE_LINE.format(value.substring(1)));
+            } else if (value.startsWith("J")) {
+                paneMaterial = XMaterial.WHITE_STAINED_GLASS_PANE;
+                displayName = TL.CHECK_WALLS_UNCHECKED_GUI_ICON.toString();
+                lore = Collections.singletonList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey()))));
+            } else if (value.startsWith("H")) {
+                paneMaterial = XMaterial.WHITE_STAINED_GLASS_PANE;
+                displayName = TL.CHECK_BUFFERS_UNCHECKED_GUI_ICON.toString();
+                lore = Collections.singletonList(TL.CHECK_TIME_LORE_LINE.format(simpleDateFormat.format(new Date(entry.getKey()))));
+            } else {
+                continue;
             }
 
-            itemStack.setData(data);
-            itemStack.setItemMeta(itemMeta);
+            ItemStack itemStack = paneMaterial.parseItem();
+            if (itemStack == null) {
+                continue;
+            }
+            ItemMeta itemMeta = itemStack.getItemMeta();
+            if (itemMeta != null) {
+                itemMeta.setDisplayName(displayName);
+                itemMeta.setLore(lore);
+                itemStack.setItemMeta(itemMeta);
+            }
 
             inventory.setItem(currentSlot, itemStack);
             ++currentSlot;

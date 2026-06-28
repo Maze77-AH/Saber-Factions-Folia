@@ -240,9 +240,16 @@ public class Metrics {
                     timer.cancel();
                     return;
                 }
-                // Nevertheless we want our code to run in the Bukkit main thread, so we have to use the Bukkit scheduler
-                // Don't be afraid! The connection to the bStats server is still async, only the stats collection is sync ;)
-                Bukkit.getScheduler().runTask(plugin, () -> submitData());
+                // Nevertheless we want our code to run on the model/main thread, so we hop there via
+                // FactionScheduler (global region scheduler on Folia, main thread on Paper). The
+                // connection to the bStats server is still async; only the stats collection is sync.
+                // The scheduler is always initialised long before the first 5-minute submission, so a
+                // null here means very early/odd startup and we simply skip this submission cycle.
+                com.massivecraft.factions.scheduler.FactionScheduler scheduler =
+                        com.massivecraft.factions.FactionsPlugin.getInstance().getFactionScheduler();
+                if (scheduler != null) {
+                    scheduler.runGlobal(() -> submitData());
+                }
             }
         }, 1000 * 60 * 5, 1000 * 60 * 30);
         // Submit the data every 30 minutes, first time after 5 minutes to give other plugins enough time to start

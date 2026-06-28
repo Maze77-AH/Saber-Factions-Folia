@@ -93,6 +93,18 @@ public class CmdCreate extends FCommand {
         final ReserveObject reservedTag = factionReserve;
         final FactionCreationService creation = services.factionCreation();
         creation.create(faction -> {
+            // Re-check tag uniqueness on the model thread. The earlier isTagTaken check ran on the
+            // command/region thread; on Folia the create transaction is scheduled separately, so two
+            // concurrent "/f create <same tag>" could otherwise both pass. This re-check is
+            // authoritative because it runs single-writer. Roll back (remove the empty faction and
+            // refund the create cost) if the tag was claimed in the gap.
+            if (Factions.getInstance().isTagTaken(tag)) {
+                creation.rollbackCreation(faction, context.fPlayer, Conf.econCostCreate,
+                        TL.COMMAND_CREATE_FORCREATE.toString());
+                context.msg(TL.COMMAND_CREATE_INUSE);
+                return;
+            }
+
             faction.setTag(tag);
             if (reservedTag != null) {
                 FactionsPlugin.getInstance().getFactionReserves().remove(reservedTag);

@@ -10,6 +10,7 @@ import com.massivecraft.factions.zcore.fperms.PermissableAction;
 import com.massivecraft.factions.zcore.util.TL;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.*;
 import org.bukkit.entity.minecart.ExplosiveMinecart;
@@ -29,6 +30,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.projectiles.ProjectileSource;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 public class FactionsEntityListener implements Listener {
@@ -42,7 +44,16 @@ public class FactionsEntityListener implements Listener {
      * they are outside their own territory.
      */
 
-    public static Set<UUID> combatList = new HashSet<>();
+    // Combat-tag set. Accessed concurrently on Folia: written from damage events (region threads,
+    // and simultaneous fights run on different region threads) and read/removed from FlightEnhance
+    // and entity-scheduler tasks. Must be a concurrent set - a plain HashSet can corrupt or loop.
+    public static Set<UUID> combatList = ConcurrentHashMap.newKeySet();
+
+    // Blocks with at least this blast resistance survive the TNT-in-liquid waterlog workaround
+    // (obsidian = 1200, ender chest = 600, enchanting table = 1200, bedrock/portals = indestructible).
+    // This replaces the legacy hardcoded numeric block-id exclusion list, which threw
+    // IllegalArgumentException on modern Minecraft because Material#getId() no longer exists.
+    private static final float WATERLOG_BREAK_MAX_BLAST_RESISTANCE = 100.0F;
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onEntityDeath(EntityDeathEvent event) {
@@ -292,10 +303,15 @@ public class FactionsEntityListener implements Listener {
                 targets.add(center.getRelative(-1, 0, 0));
 
                 for (Block target : targets) {
-                    @SuppressWarnings("deprecation")
-                    int id = target.getType().getId();
-                    // ignore air, bedrock, water, lava, obsidian, enchanting table, etc.... too bad we can't get a blast resistance value through Bukkit yet
-                    if (id != 0 && (id < 7 || id > 11) && id != 90 && id != 116 && id != 119 && id != 120 && id != 130) {
+                    Material type = target.getType();
+                    // Skip air and liquids; only break blocks weak enough for a normal explosion to
+                    // destroy. Blast resistance is the modern replacement for the old numeric block-id
+                    // list and keeps indestructible/special blocks (obsidian, ender chest, enchanting
+                    // table, bedrock, portals) intact.
+                    if (type.isAir() || target.isLiquid()) {
+                        continue;
+                    }
+                    if (type.getBlastResistance() < WATERLOG_BREAK_MAX_BLAST_RESISTANCE) {
                         target.breakNaturally();
                     }
                 }

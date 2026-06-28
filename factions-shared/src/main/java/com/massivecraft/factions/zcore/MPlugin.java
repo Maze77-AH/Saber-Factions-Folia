@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
 
@@ -41,8 +42,9 @@ public abstract class MPlugin extends JavaPlugin {
     public PermUtil perm;
 
     public String refCommand = "";
-    //holds f stuck taskids
-    public Map<UUID, ScheduledTaskHandle> stuckMap = new HashMap<>();
+    //holds f stuck taskids - accessed from /f stuck, the stuck entity-scheduler task, and damage
+    // events (cancelFStuckTeleport) across region threads on Folia, so it must be concurrent.
+    public Map<UUID, ScheduledTaskHandle> stuckMap = new ConcurrentHashMap<>();
 
     protected boolean loadSuccessful = false;
     private ScheduledTaskHandle saveTask = null;
@@ -52,8 +54,8 @@ public abstract class MPlugin extends JavaPlugin {
     private final Map<String, MCommand<?>> baseCommands = new HashMap<>();
 
     private static final Pattern ARGUMENT_DELIMITER = Pattern.compile("\\s+");
-    // holds f stuck start times
-    private final Map<UUID, Long> timers = new HashMap<>();
+    // holds f stuck start times - accessed across region threads on Folia (see stuckMap).
+    private final Map<UUID, Long> timers = new ConcurrentHashMap<>();
 
     // -------------------------------------------- //
     // ENABLE

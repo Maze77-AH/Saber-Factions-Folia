@@ -3,9 +3,9 @@ package com.massivecraft.factions.cmd;
 import com.massivecraft.factions.struct.Permission;
 import com.massivecraft.factions.zcore.util.TL;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CmdFGlobal extends FCommand {
 
@@ -13,7 +13,9 @@ public class CmdFGlobal extends FCommand {
      * @author Trent
      */
 
-    public static List<UUID> toggled = new ArrayList<>();
+    // Read from the async chat handler (per recipient) and written from this command on region
+    // threads, so it must be concurrent. A Set also makes the per-recipient contains() check O(1).
+    public static Set<UUID> toggled = ConcurrentHashMap.newKeySet();
 
     public CmdFGlobal() {
         super();
